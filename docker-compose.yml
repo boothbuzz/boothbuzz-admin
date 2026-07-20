@@ -11,5 +11,5 @@ services:
     image: boothbuzz-admin:latest
     container_name: boothbuzz-admin
     ports:
-      - "${ADMIN_PORT:-8080}:80"
+      - "${ADMIN_PORT:-8081}:80"
     restart: unless-stopped
