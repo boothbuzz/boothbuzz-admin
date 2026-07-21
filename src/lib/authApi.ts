@@ -25,6 +25,7 @@ function pickAuthToken(data: LoginResponse | null | undefined): string | null {
 
 export async function login(email: string, password: string) {
   const result = await apiFetch<LoginResponse>('/admin/auth/login', {
+  const result = await apiFetch<LoginResponse>('/admin/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
