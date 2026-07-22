@@ -234,6 +234,7 @@ export interface Vendor {
 
 export interface Exhibitor {
   id: string;
+  organizationId?: string | null;
   // Personal Information (NEW - matching AddExhibitor Step 1)
   firstName?: string | null; // first_name from DB
   lastName?: string | null; // last_name from DB

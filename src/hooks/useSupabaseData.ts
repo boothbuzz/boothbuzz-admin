@@ -360,8 +360,17 @@ export const useVendors = () => {
 };
 
 export const useExhibitors = () => {
-  const { data, loading, error, refetch } = useSupabaseData<any>('exhibitors', '*', [],
-    { order: { column: 'created_at', ascending: false } });
+  const { user, isSuperAdmin } = useAuth();
+  const { data, loading, error, refetch } = useSupabaseData<any>(
+    'exhibitors',
+    '*',
+    [user?.organizationId, isSuperAdmin],
+    {
+      order: { column: 'created_at', ascending: false },
+      organizationId: user?.organizationId ?? null,
+      isSuperAdmin,
+    },
+  );
   
   // Transform data to match our Exhibitor interface
   const exhibitors: Exhibitor[] = data.map((exhibitor: any) => {
@@ -374,6 +383,7 @@ export const useExhibitors = () => {
 
     return {
     id: exhibitor.id,
+    organizationId: exhibitor.organization_id ?? exhibitor.organizationId ?? null,
     // Personal Information (NEW - matching AddExhibitor Step 1)
     firstName,
     lastName,

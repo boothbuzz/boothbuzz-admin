@@ -41,6 +41,8 @@ import { apiClient } from '../lib/apiClient';
 import { uploadExhibitorPublicImage } from '../lib/exhibitorStorage';
 import { exhibitorImageUrlsColumnValue } from '../lib/exhibitorImageDb';
 import { getDefaultExhibitorProfileUrl } from '../constants/exhibitorDefaultProfile';
+import { OrganizationSelect, resolveOrganizationId } from '../components/UI/OrganizationSelect';
+import { useOrganizations } from '../hooks/useOrganizations';
 import statesData from '../data/states.json';
 
 interface FormData {
@@ -112,6 +114,7 @@ interface FormData {
   paymentStatus: 'pending' | 'paid' | 'partial';
   sendConfirmationEmail: boolean;
   allowMarketingEmails: boolean;
+  organizationId: string;
 }
 
 interface FormErrors {
@@ -135,7 +138,8 @@ const boothSizes = ['3x3 meters', '3x6 meters', '6x6 meters', '6x9 meters', '9x9
 
 export const AddExhibitor: React.FC = () => {
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
+  const { hasRole, user, isSuperAdmin } = useAuth();
+  const { organizations } = useOrganizations();
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -192,6 +196,7 @@ export const AddExhibitor: React.FC = () => {
     // Add all missing fields to match FormData type
     sendConfirmationEmail: false,
     allowMarketingEmails: false,
+    organizationId: '',
 
     // Add missing fields based on FormData interface
     products: [],
@@ -284,6 +289,9 @@ export const AddExhibitor: React.FC = () => {
     }
     if (!formData.companyName.trim()) newErrors.companyName = 'Company name is required';
     if (!formData.category) newErrors.category = 'Main category is required';
+    if (isSuperAdmin && !formData.organizationId) {
+      newErrors.organizationId = 'Organization is required';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -735,6 +743,7 @@ export const AddExhibitor: React.FC = () => {
         portfolioUrl || imageUrls[0] || getDefaultExhibitorProfileUrl();
 
       const insertData = {
+        organization_id: resolveOrganizationId(isSuperAdmin, formData.organizationId, user?.organizationId),
         // Personal Information
         first_name: formData.firstName,
         last_name: formData.lastName,
@@ -959,6 +968,14 @@ export const AddExhibitor: React.FC = () => {
                 </h3>
               </CardHeader>
               <CardContent className="space-y-6">
+                {isSuperAdmin && (
+                  <OrganizationSelect
+                    value={formData.organizationId}
+                    onChange={(id) => handleInputChange('organizationId', id)}
+                    organizations={organizations}
+                    error={errors.organizationId}
+                  />
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
