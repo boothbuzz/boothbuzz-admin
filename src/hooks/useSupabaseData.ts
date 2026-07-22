@@ -5,20 +5,45 @@ import { User, Event, Venue, Vendor, Exhibitor } from '../types';
 import { parseExhibitorImageUrls } from '../utils/exhibitorPortfolio';
 
 /** Normalize API date values to YYYY-MM-DD for <input type="date">. */
-function toDateInputValue(value: unknown): string {
+export function toDateInputValue(value: unknown): string {
   if (value == null || value === '') return '';
-  const s = String(value);
+  const s = String(value).trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toISOString().slice(0, 10);
+  // Local calendar date — avoids UTC day-shift for IST midnights
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
-function splitContactName(contactPerson?: string | null): { firstName: string; lastName: string } {
-  const parts = (contactPerson || '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return { firstName: '', lastName: '' };
-  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
-  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+function normalizeDocumentUrls(raw: unknown): {
+  panCard: string | null;
+  aadharCard: string | null;
+  licence: string | null;
+} {
+  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    panCard: (obj.panCard ?? obj.pan_card ?? null) as string | null,
+    aadharCard: (obj.aadharCard ?? obj.aadhar_card ?? null) as string | null,
+    licence: (obj.licence ?? obj.license ?? null) as string | null,
+  };
+}
+
+function normalizeSocialLinks(raw: unknown): {
+  linkedin: string;
+  facebook: string;
+  twitter: string;
+  instagram: string;
+} {
+  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    linkedin: String(obj.linkedin ?? ''),
+    facebook: String(obj.facebook ?? ''),
+    twitter: String(obj.twitter ?? ''),
+    instagram: String(obj.instagram ?? ''),
+  };
 }
 
 export type UseSupabaseDataOptions = {
@@ -378,9 +403,18 @@ export const useExhibitors = () => {
     
     // Location & Address (NEW - matching AddExhibitor Step 2)
     address: exhibitor.address,
-    address1: exhibitor.address1 || exhibitor.address || '',
-    address2: exhibitor.address2 || '',
-    city: exhibitor.city,
+    address1:
+      exhibitor.address1 ||
+      exhibitor.address_line1 ||
+      exhibitor.addressLine1 ||
+      exhibitor.address ||
+      '',
+    address2:
+      exhibitor.address2 ||
+      exhibitor.address_line2 ||
+      exhibitor.addressLine2 ||
+      '',
+    city: exhibitor.city || '',
     state: exhibitor.state || '',
     pincode: exhibitor.pincode || '',
     country: exhibitor.country || '',
@@ -403,19 +437,14 @@ export const useExhibitors = () => {
     billingAddress: exhibitor.billing_address,
     
     // Additional Information
-    socialMediaLinks: exhibitor.social_media_links || exhibitor.socialMediaLinks || {
-      linkedin: '',
-      facebook: '',
-      twitter: '',
-      instagram: ''
-    },
+    socialMediaLinks: normalizeSocialLinks(
+      exhibitor.social_media_links ?? exhibitor.socialMediaLinks,
+    ),
     
     // Documents & Images (NEW - matching AddExhibitor Steps 4 & 5)
-    documentUrls: exhibitor.document_urls || exhibitor.documentUrls || {
-      panCard: null,
-      aadharCard: null,
-      licence: null
-    },
+    documentUrls: normalizeDocumentUrls(
+      exhibitor.document_urls ?? exhibitor.documentUrls,
+    ),
     imageUrls: parseExhibitorImageUrls(
       exhibitor.image_urls ?? exhibitor.imageUrls ?? null
     ),

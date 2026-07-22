@@ -651,15 +651,29 @@ export const Exhibitors: React.FC = () => {
     console.log('📄 Document URLs:', exhibitor.documentUrls);
     console.log('🖼️ Image URLs:', exhibitor.imageUrls);
     setSelectedExhibitor(exhibitor);
-    
-    // Set existing documents and images for display
-    const docUrls = {
-      panCard: exhibitor.documentUrls?.panCard || '',
-      aadharCard: exhibitor.documentUrls?.aadharCard || '',
-      licence: exhibitor.documentUrls?.licence || ''
+
+    const normalizedDocs = {
+      panCard:
+        exhibitor.documentUrls?.panCard ||
+        exhibitor.documentUrls?.pan_card ||
+        exhibitor.document_urls?.panCard ||
+        exhibitor.document_urls?.pan_card ||
+        '',
+      aadharCard:
+        exhibitor.documentUrls?.aadharCard ||
+        exhibitor.documentUrls?.aadhar_card ||
+        exhibitor.document_urls?.aadharCard ||
+        exhibitor.document_urls?.aadhar_card ||
+        '',
+      licence:
+        exhibitor.documentUrls?.licence ||
+        exhibitor.documentUrls?.license ||
+        exhibitor.document_urls?.licence ||
+        exhibitor.document_urls?.license ||
+        '',
     };
-    console.log('📋 Setting existingDocuments:', docUrls);
-    setExistingDocuments(docUrls);
+    console.log('📋 Setting existingDocuments:', normalizedDocs);
+    setExistingDocuments(normalizedDocs);
     
     const imgUrls = parseExhibitorImageUrls(exhibitor.imageUrls ?? (exhibitor as { image_urls?: unknown }).image_urls);
     console.log('🖼️ Setting existingImages:', imgUrls);
@@ -667,6 +681,8 @@ export const Exhibitors: React.FC = () => {
 
     const { firstName: resolvedFirstName, lastName: resolvedLastName } = resolveEditPersonalNames(exhibitor);
     setEditErrors({});
+
+    const social = exhibitor.socialMediaLinks || exhibitor.social_media_links || {};
 
     // Map Exhibitor to ExtendedExhibitorFormData with NEW structure matching AddExhibitor exactly
     setEditFormData({
@@ -680,8 +696,17 @@ export const Exhibitors: React.FC = () => {
       alternatePhone: exhibitor.alternatePhone || '',
       
       // Address (Step 2 - matching AddExhibitor)
-      address1: exhibitor.address1 || '',
-      address2: exhibitor.address2 || '',
+      address1:
+        exhibitor.address1 ||
+        exhibitor.address_line1 ||
+        exhibitor.addressLine1 ||
+        exhibitor.address ||
+        '',
+      address2:
+        exhibitor.address2 ||
+        exhibitor.address_line2 ||
+        exhibitor.addressLine2 ||
+        '',
       city: exhibitor.city || '',
       state: exhibitor.state || '',
       pincode: exhibitor.pincode || '',
@@ -694,15 +719,19 @@ export const Exhibitors: React.FC = () => {
       subCategory: normalizeSubCategoriesCsv(
         exhibitor.subCategory ?? exhibitor.sub_category ?? ''
       ),
-      panNumber: exhibitor.panNumber || '',
-      gstNumber: exhibitor.gstNumber || '',
-      boothSize: exhibitor.boothSize || '',
-      businessDescription: exhibitor.businessDescription || '',
+      panNumber: exhibitor.panNumber || exhibitor.pan_number || '',
+      gstNumber: exhibitor.gstNumber || exhibitor.gst_number || '',
+      boothSize: exhibitor.boothSize || exhibitor.booth_size || '',
+      businessDescription:
+        exhibitor.businessDescription ||
+        exhibitor.companyDescription ||
+        exhibitor.company_description ||
+        '',
       socialMediaLinks: {
-        facebook: exhibitor.socialMediaLinks?.facebook || '',
-        linkedin: exhibitor.socialMediaLinks?.linkedin || '',
-        instagram: exhibitor.socialMediaLinks?.instagram || '',
-        twitter: exhibitor.socialMediaLinks?.twitter || ''
+        facebook: social.facebook || '',
+        linkedin: social.linkedin || '',
+        instagram: social.instagram || '',
+        twitter: social.twitter || ''
       },
       
       // Documents (Step 4 - matching AddExhibitor)
@@ -711,10 +740,10 @@ export const Exhibitors: React.FC = () => {
         aadharCard: null,
         licence: null
       },
-      documentUrls: exhibitor.documentUrls || {
-        panCard: null,
-        aadharCard: null,
-        licence: null
+      documentUrls: {
+        panCard: normalizedDocs.panCard || null,
+        aadharCard: normalizedDocs.aadharCard || null,
+        licence: normalizedDocs.licence || null,
       },
       
       // Upload Images (Step 5 - matching AddExhibitor)
@@ -2182,6 +2211,10 @@ export const Exhibitors: React.FC = () => {
                             }`}
                           >
                             <option value="">Select state</option>
+                            {editFormData.state &&
+                              !statesData.some((s) => s.name === editFormData.state) && (
+                              <option value={editFormData.state}>{editFormData.state}</option>
+                            )}
                             {statesData.map((state) => (
                               <option key={state.id} value={state.name}>
                                 {state.name}
@@ -2211,6 +2244,15 @@ export const Exhibitors: React.FC = () => {
                             }`}
                           >
                             <option value="">Select city</option>
+                            {editFormData.city &&
+                              editFormData.state &&
+                              !(
+                                statesData
+                                  .find((s) => s.name === editFormData.state)
+                                  ?.cities || []
+                              ).includes(editFormData.city) && (
+                              <option value={editFormData.city}>{editFormData.city}</option>
+                            )}
                             {editFormData.state && statesData
                               .find(s => s.name === editFormData.state)?.cities
                               .map(city => (

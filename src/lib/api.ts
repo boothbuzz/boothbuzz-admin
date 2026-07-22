@@ -87,6 +87,25 @@ export function publicFileUrl(bucket: string, objectPath: string) {
   return `${getApiUrl()}/files/${bucket}/${objectPath.replace(/^\//, '')}`;
 }
 
+/** Turn relative storage paths into absolute URLs the browser can load. */
+export function resolveMediaUrl(url: string | null | undefined): string {
+  const raw = String(url ?? '').trim();
+  if (!raw) return '';
+  if (/^(https?:|blob:|data:)/i.test(raw)) return raw;
+  if (raw.startsWith('/api/') || raw.startsWith('/files/')) {
+    const base = getApiUrl().replace(/\/api\/v1$/, '');
+    return `${base}${raw.startsWith('/') ? raw : `/${raw}`}`;
+  }
+  // Common storage path shapes: "event-images/..." or "bucket/path"
+  const parts = raw.replace(/^\//, '').split('/');
+  if (parts.length >= 2) {
+    const bucket = parts[0];
+    const objectPath = parts.slice(1).join('/');
+    return publicFileUrl(bucket, objectPath);
+  }
+  return raw;
+}
+
 const TABLE_PATH: Record<string, string> = {
   users: '/admin/users',
   events: '/admin/events',

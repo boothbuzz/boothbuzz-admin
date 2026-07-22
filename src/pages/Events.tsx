@@ -9,7 +9,8 @@ import { EventVendorPurchaseOrderModal } from '../components/Events/EventVendorP
 import { EventFlyerGeneratorModal } from '../components/Events/EventFlyerGeneratorModal';
 import { Event, Exhibitor } from '../types';
 import { apiClient } from '../lib/apiClient';
-import { useEvents, useVenues, useVendors, useExhibitors, useSponsors } from '../hooks/useSupabaseData';
+import { useEvents, useVenues, useVendors, useExhibitors, useSponsors, toDateInputValue } from '../hooks/useSupabaseData';
+import { resolveMediaUrl } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface StallConfigRow {
@@ -299,8 +300,11 @@ export const Events: React.FC = () => {
   };
 
   /** Saved Supabase/public URLs (not blob: previews). */
-  const isRemoteEventImageUrl = (url: string | null | undefined): boolean =>
-    /^https?:\/\//i.test(String(url ?? '').trim());
+  const isRemoteEventImageUrl = (url: string | null | undefined): boolean => {
+    const s = String(url ?? '').trim();
+    if (!s || s.startsWith('blob:')) return false;
+    return /^(https?:|data:)/i.test(s) || !s.includes('://');
+  };
 
   // Helper functions to get names from IDs
   const getVendorName = (vendorId: string) => {
@@ -1028,16 +1032,41 @@ export const Events: React.FC = () => {
     console.log('🔍 Database event object:', (event as any));
     setSelectedEvent(event);
 
-    const eventImageUrls = parseEventImages(event.eventImageUrl);
+    const eventImageUrls = parseEventImages(event.eventImageUrl)
+      .map((u) => resolveMediaUrl(u))
+      .filter(Boolean);
+
+    const mappedStalls = (event.inSiteStalls || event.allStalls || []).map((stall: any, idx: number) => ({
+      id: stall.id != null ? String(stall.id) : `stall-${idx}`,
+      stallNo: String(stall.stallNo ?? stall.stall_no ?? '').trim(),
+      stallSize: String(stall.stallSize ?? stall.stall_size ?? stall.size ?? ''),
+      stallCategory: String(stall.stallCategory ?? stall.stall_category ?? stall.category ?? ''),
+      price:
+        typeof stall.price === 'number'
+          ? stall.price
+          : Number(stall.price ?? stall.stallPrice ?? stall.stall_price) || 0,
+    }));
+
+    const firstStall = mappedStalls[0];
+    const prefixFromStall = (() => {
+      const no = firstStall?.stallNo || '';
+      const m = no.match(/^([A-Za-z]+)/);
+      return m ? m[1].toUpperCase() : 'A';
+    })();
+    setBulkStallPrefix(prefixFromStall);
+    setBulkStallSize(firstStall?.stallSize || '');
+    setBulkStallPrice(firstStall?.price || 0);
 
     // Map Event to ExtendedEventFormData with default values for missing fields
     const editData = {
       id: event.id,
       title: event.title,
       description: event.description || '',
-      eventDate: event.date,
-      eventEndDate: event.eventEndDate || '',
-      eventTime: event.time,
+      eventDate: toDateInputValue(event.date || (event as any).event_date || (event as any).eventDate),
+      eventEndDate: toDateInputValue(
+        event.eventEndDate || (event as any).event_end_date || (event as any).eventEndDate,
+      ),
+      eventTime: event.time || '',
       eventEndTime: event.eventEndTime || '',
       venueId: event.venueId || '',
       venueName: event.venue,
@@ -1059,7 +1088,7 @@ export const Events: React.FC = () => {
       eventImageUrls,
       // Layout Image Field
       layoutImage: null,
-      layoutImageUrl: event.layoutImageUrl || '',
+      layoutImageUrl: resolveMediaUrl(event.layoutImageUrl || '') || '',
       // Venue Facilities & Amenities (from linked venue so edit UI can show checkboxes)
       venueFacilities: (() => {
         const v = venues.find((venue) => venue.id === event.venueId);
@@ -1073,9 +1102,9 @@ export const Events: React.FC = () => {
       selectedFacilities: event.selectedFacilities || [],
       selectedAmenities: event.selectedAmenities || [],
       // Stalls Configuration
-      noOfStalls: event.noOfStalls || 0,
-      stallSize: '',
-      stallCategory: '',
+      noOfStalls: event.noOfStalls || mappedStalls.length || 0,
+      stallSize: firstStall?.stallSize || '',
+      stallCategory: firstStall?.stallCategory || '',
       // Pricing & Availability
       pricePerHour: event.pricePerHour || 0,
       availableHours: event.availableHours || '',
@@ -1084,13 +1113,7 @@ export const Events: React.FC = () => {
       alcoholAllowed: event.alcoholAllowed || false,
       smokingAllowed: event.smokingAllowed || false,
       // Unified stall config (support snake_case from JSONB)
-      allStalls: (event.inSiteStalls || []).map((stall: any, idx: number) => ({
-        id: stall.id != null ? String(stall.id) : `stall-${idx}`,
-        stallNo: String(stall.stallNo ?? stall.stall_no ?? '').trim(),
-        stallSize: String(stall.stallSize ?? stall.stall_size ?? ''),
-        stallCategory: String(stall.stallCategory ?? stall.stall_category ?? ''),
-        price: typeof stall.price === 'number' ? stall.price : Number(stall.price) || 0
-      })),
+      allStalls: mappedStalls,
       stallNumbersFromDb: event.stallNumbersFromDb || [],
       organizationId: event.organizationId ?? null,
     };
@@ -1098,7 +1121,9 @@ export const Events: React.FC = () => {
     console.log('📝 Mapped stalls data:', editData.allStalls);
 
     // Set selected vendors and exhibitors (pre-select existing ones)
-    setSelectedVendors(event.vendors || []);
+    setSelectedVendors(
+      (event.vendors || (event as any).vendor_ids || []).map(String).filter(Boolean),
+    );
     setSelectedExhibitors(event.exhibitors || []);
     setSelectedExhibitorsForEdit(event.exhibitors || []);
 
@@ -1107,6 +1132,7 @@ export const Events: React.FC = () => {
 
     setEditFormData(editData);
     setExhibitorUpdates({});
+    setEditActiveTab('event');
     setShowEditModal(true);
   };
 

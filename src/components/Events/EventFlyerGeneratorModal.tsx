@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, Download, Sparkles, Loader2, ImagePlus } from 'lucide-react';
 import { Button } from '../UI/Button';
 import { Event } from '../../types';
-import { generateEventFlyer, apiClient } from '../../lib/apiClient';
+import { apiClient } from '../../lib/apiClient';
+import { generateEventFlyerImage } from '../../utils/generateEventFlyerImage';
 
 type Props = {
   isOpen: boolean;
@@ -139,7 +140,7 @@ export const EventFlyerGeneratorModal: React.FC<Props> = ({ isOpen, event, onClo
     setLoadingSponsors(true);
     apiClient
       .from('event_sponsors')
-      .select('role, sponsors(company_name)')
+      .select('role, sponsor_id')
       .eq('event_id', eventId)
       .then(({ data, error }) => {
         if (cancelled) return;
@@ -147,14 +148,22 @@ export const EventFlyerGeneratorModal: React.FC<Props> = ({ isOpen, event, onClo
         if (error) return;
         const sponsorLines = (data || [])
           .map((row: any) => {
-            const companyName = row?.sponsors?.company_name;
+            const companyName =
+              row?.sponsor?.company_name ||
+              row?.sponsors?.company_name ||
+              row?.sponsor?.companyName ||
+              null;
             if (!companyName) return null;
             const roleLabel = formatSponsorRole(row?.role);
             return `${roleLabel}: ${companyName}`;
           })
           .filter((v: string | null) => Boolean(v));
         const sponsorText =
-          sponsorLines.length > 0 ? `Sponsors: ${sponsorLines.join(' | ')}` : 'Sponsors: TBA';
+          sponsorLines.length > 0
+            ? `Sponsors: ${sponsorLines.join(' | ')}`
+            : (data || []).length > 0
+              ? `Sponsors: ${(data || []).length} assigned`
+              : 'Sponsors: TBA';
         setForm((prev) => ({ ...prev, sponsorText }));
       });
     return () => {
@@ -171,9 +180,9 @@ export const EventFlyerGeneratorModal: React.FC<Props> = ({ isOpen, event, onClo
     setIsGenerating(true);
     setErrorMsg('');
     setGeneratedSrc('');
-    const payload = {
-      size: '1024x1024',
-      content: {
+    try {
+      await new Promise((r) => setTimeout(r, 50));
+      const dataUrl = generateEventFlyerImage({
         title: form.title.trim(),
         subtitle: form.subtitle.trim(),
         date: form.dateText.trim(),
@@ -183,32 +192,14 @@ export const EventFlyerGeneratorModal: React.FC<Props> = ({ isOpen, event, onClo
         stalls: form.stallsText.trim(),
         sponsors: form.sponsorText.trim(),
         cta: form.ctaText.trim(),
-      },
-      meta: {
-        eventId: event.id,
-      },
-    };
-
-    const { data, error } = await generateEventFlyer(payload);
-    setIsGenerating(false);
-    if (error) {
-      console.error('generate-event-flyer error:', error);
-      setErrorMsg(error.message || 'Could not generate flyer.');
-      return;
+      });
+      setGeneratedSrc(dataUrl);
+    } catch (err: any) {
+      console.error('generate-event-flyer error:', err);
+      setErrorMsg(err?.message || 'Could not generate flyer.');
+    } finally {
+      setIsGenerating(false);
     }
-    if (!data) {
-      setErrorMsg('No response received from flyer service.');
-      return;
-    }
-    if (data.imageBase64) {
-      setGeneratedSrc(`data:image/png;base64,${data.imageBase64}`);
-      return;
-    }
-    if (data.imageUrl) {
-      setGeneratedSrc(String(data.imageUrl));
-      return;
-    }
-    setErrorMsg('Flyer generated but image data is missing.');
   };
 
   const handleDownload = () => {
@@ -282,7 +273,7 @@ export const EventFlyerGeneratorModal: React.FC<Props> = ({ isOpen, event, onClo
       <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[92vh] overflow-y-auto">
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Generate AI Flyer</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Generate Flyer</h3>
             <p className="text-xs text-gray-500">Instagram Post (1024x1024)</p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
@@ -429,4 +420,3 @@ export const EventFlyerGeneratorModal: React.FC<Props> = ({ isOpen, event, onClo
     </div>
   );
 };
-

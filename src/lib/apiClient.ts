@@ -9,13 +9,39 @@ function camelToSnakeKey(key: string): string {
   return key.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`);
 }
 
+/** JSON/object columns whose nested keys must stay as stored (do not snake_case children). */
+const LEAVE_NESTED_KEYS = new Set([
+  'document_urls',
+  'documentUrls',
+  'social_media_links',
+  'socialMediaLinks',
+  'in_site_stalls',
+  'inSiteStalls',
+  'out_site_stalls',
+  'outSiteStalls',
+  'selected_facilities',
+  'selectedFacilities',
+  'selected_amenities',
+  'selectedAmenities',
+  'image_urls',
+  'imageUrls',
+  'benefits',
+  'facilities',
+  'amenities',
+]);
+
 export function toSnake<T>(value: T): T {
   if (value == null || value instanceof Date) return value;
   if (Array.isArray(value)) return value.map((v) => toSnake(v)) as T;
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[camelToSnakeKey(k)] = toSnake(v);
+      const snakeKey = camelToSnakeKey(k);
+      if (LEAVE_NESTED_KEYS.has(k) || LEAVE_NESTED_KEYS.has(snakeKey)) {
+        out[snakeKey] = v;
+      } else {
+        out[snakeKey] = toSnake(v);
+      }
     }
     return out as T;
   }
@@ -218,9 +244,32 @@ class QueryBuilder {
       return { data: data ? toSnake(data) : null, error };
     }
 
-    if (this.pendingDelete && id) {
-      const { data, error } = await apiFetch(`${path}/${id}`, { method: 'DELETE' });
-      return { data: data ?? { ok: true }, error };
+    if (this.pendingDelete) {
+      const id = this.idFilter();
+      if (id) {
+        const { data, error } = await apiFetch(`${path}/${id}`, { method: 'DELETE' });
+        return { data: data ?? { ok: true }, error };
+      }
+      // Support filtered deletes used by admin UI
+      const eventId = this.filters.find((f) => (f.col === 'event_id' || f.col === 'eventId') && f.op === 'eq');
+      if (this.table === 'event_sponsors' && eventId) {
+        const { data, error } = await apiFetch(
+          `${path}?event_id=${encodeURIComponent(String(eventId.val))}`,
+          { method: 'DELETE' },
+        );
+        return { data: data ?? { ok: true }, error };
+      }
+      const poId = this.filters.find(
+        (f) => (f.col === 'purchase_order_id' || f.col === 'purchaseOrderId') && f.op === 'eq',
+      );
+      if (this.table === 'purchase_order_lines' && poId) {
+        const { data, error } = await apiFetch(
+          `${path}?purchase_order_id=${encodeURIComponent(String(poId.val))}`,
+          { method: 'DELETE' },
+        );
+        return { data: data ?? { ok: true }, error };
+      }
+      return { data: null, error: { message: 'Delete requires id (or supported filter)' } };
     }
 
     const email = this.emailFilter();
@@ -244,7 +293,26 @@ class QueryBuilder {
       return { data: row, error: null };
     }
 
-    const { data, error } = await apiFetch<Row[]>(path);
+    // Forward common eq filters as query params for list endpoints that support them
+    const qs = new URLSearchParams();
+    for (const f of this.filters) {
+      if (f.op !== 'eq') continue;
+      const key = camelToSnakeKey(f.col);
+      if (
+        [
+          'event_id',
+          'vendor_id',
+          'purchase_order_id',
+          'campaign_id',
+          'organization_id',
+          'email',
+        ].includes(key)
+      ) {
+        qs.set(key, String(f.val));
+      }
+    }
+    const listPath = qs.toString() ? `${path}?${qs.toString()}` : path;
+    const { data, error } = await apiFetch<Row[]>(listPath);
     if (error) return { data: null, error };
 
     let rows = (Array.isArray(data) ? data : data ? [data] : []).map((r) => {
