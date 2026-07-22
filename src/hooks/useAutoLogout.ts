@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
-const AUTO_LOGOUT_TIME = 5 * 60 * 1000; // 5 minutes in milliseconds
+const AUTO_LOGOUT_TIME = 24 * 60 * 60 * 1000; // 24 hours
 
 export const useAutoLogout = () => {
   const { user, logout } = useAuth();
@@ -18,7 +18,7 @@ export const useAutoLogout = () => {
 
     // Set new timeout for auto-logout
     timeoutRef.current = setTimeout(() => {
-      console.log('Auto-logout: User inactive for 10 minutes, logging out...');
+      console.log('Auto-logout: User inactive for 24 hours, logging out...');
       logout();
     }, AUTO_LOGOUT_TIME);
 

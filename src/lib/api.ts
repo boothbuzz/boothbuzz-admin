@@ -6,12 +6,28 @@ export function getApiUrl() {
 }
 
 export function setAuthToken(token: string | null) {
-  if (token) sessionStorage.setItem(AUTH_TOKEN_KEY, token);
-  else sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  if (typeof window === 'undefined') return;
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    sessionStorage.removeItem(AUTH_TOKEN_KEY); // clear legacy key
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+  }
 }
 
 export function getAuthToken(): string | null {
-  return sessionStorage.getItem(AUTH_TOKEN_KEY);
+  if (typeof window === 'undefined') return null;
+  const fromLocal = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (fromLocal) return fromLocal;
+  // Migrate legacy sessionStorage token once
+  const fromSession = sessionStorage.getItem(AUTH_TOKEN_KEY);
+  if (fromSession) {
+    localStorage.setItem(AUTH_TOKEN_KEY, fromSession);
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    return fromSession;
+  }
+  return null;
 }
 
 type ApiError = { error: string };

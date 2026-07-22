@@ -20,11 +20,14 @@ import { Card, CardHeader, CardContent } from '../components/UI/Card';
 import { Button } from '../components/UI/Button';
 import { Badge } from '../components/UI/Badge';
 import { useAuth } from '../contexts/AuthContext';
+import { useOrganizations } from '../hooks/useOrganizations';
+import { OrganizationSelect, resolveOrganizationId } from '../components/UI/OrganizationSelect';
 
 interface FormData {
   name: string;
   category: 'sound_lights' | 'catering' | 'decoration' | 'security' | 'transportation' | 'housekeeping';
   city: string;
+  organizationId: string;
   contactPerson: string;
   email: string;
   phone: string;
@@ -51,7 +54,8 @@ const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Pune', 'Chennai', 'Hyderabad', 
 
 export const AddVendor: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
+  const { organizations } = useOrganizations();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
@@ -59,6 +63,7 @@ export const AddVendor: React.FC = () => {
     name: '',
     category: 'sound_lights',
     city: '',
+    organizationId: '',
     contactPerson: '',
     email: '',
     phone: '',
@@ -83,6 +88,10 @@ export const AddVendor: React.FC = () => {
     // City validation
     if (!formData.city) {
       newErrors.city = 'City is required';
+    }
+
+    if (isSuperAdmin && !formData.organizationId) {
+      newErrors.organizationId = 'Organization is required';
     }
 
     // Contact person validation
@@ -145,7 +154,7 @@ export const AddVendor: React.FC = () => {
           name: formData.name,
           category: formData.category,
           city: formData.city,
-          organization_id: user?.organizationId ?? null,
+          organization_id: resolveOrganizationId(isSuperAdmin, formData.organizationId, user?.organizationId),
           contact_person: formData.contactPerson,
           email: formData.email,
           phone: formData.phone,
@@ -203,6 +212,7 @@ export const AddVendor: React.FC = () => {
                     name: '',
                     category: 'sound_lights',
                     city: '',
+                    organizationId: '',
                     contactPerson: '',
                     email: '',
                     phone: '',
@@ -256,6 +266,14 @@ export const AddVendor: React.FC = () => {
                 </h3>
               </CardHeader>
               <CardContent className="space-y-6">
+                {isSuperAdmin && (
+                  <OrganizationSelect
+                    value={formData.organizationId}
+                    onChange={(id) => handleInputChange('organizationId', id)}
+                    organizations={organizations}
+                    error={errors.organizationId}
+                  />
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Vendor Name *

@@ -26,6 +26,8 @@ import { Button } from '../components/UI/Button';
 import { Badge } from '../components/UI/Badge';
 import { useAuth } from '../contexts/AuthContext';
 import { useVenues, useVendors, useExhibitors } from '../hooks/useSupabaseData';
+import { useOrganizations } from '../hooks/useOrganizations';
+import { OrganizationSelect, resolveOrganizationId } from '../components/UI/OrganizationSelect';
 // @ts-ignore
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -49,6 +51,7 @@ interface FormData {
   eventEndTime: string;
   venueId: string;
   venueName: string;
+  organizationId: string;
   city: string;
   maxCapacity: number;
   planType: 'Plan A' | 'Plan B' | 'Plan C' | 'Custom';
@@ -98,7 +101,8 @@ const planTypes = [
 
 export const CreateEvent: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
+  const { organizations } = useOrganizations();
   const { venues, loading: venuesLoading } = useVenues();
   const activeVenues = venues.filter(
     (venue) => (venue.status || '').toString().toLowerCase() === 'active'
@@ -137,6 +141,7 @@ export const CreateEvent: React.FC = () => {
     eventEndTime: '',
     venueId: '',
     venueName: '',
+    organizationId: '',
     city: '',
     maxCapacity: 100,
     planType: 'Plan A',
@@ -250,6 +255,10 @@ export const CreateEvent: React.FC = () => {
       newErrors.venueId = 'Please select a venue';
     }
 
+    if (isSuperAdmin && !formData.organizationId) {
+      newErrors.organizationId = 'Organization is required';
+    }
+
     // City validation
     // if (!formData.city.trim()) {
     //   newErrors.city = 'City is required';
@@ -327,28 +336,27 @@ export const CreateEvent: React.FC = () => {
       });
     }
 
-    // Auto-populate venue name and city when venue is selected
+    // Auto-populate venue name, city, and org (for super admin) when venue is selected
     if (field === 'venueId' && value) {
-
       const selectedVenue = activeVenues.find(v => v.id === value);
 
       if (selectedVenue) {
-
-        const updatedData = {
+        const updatedData: Partial<FormData> = {
           venueName: selectedVenue.name,
-          city: selectedVenue.city?selectedVenue.city:selectedVenue.location?.split(',').pop()?.trim() || '',
+          city: selectedVenue.city ? selectedVenue.city : selectedVenue.location?.split(',').pop()?.trim() || '',
           maxCapacity: selectedVenue.memberCount || 100,
           venueFacilities: selectedVenue.facilities || [],
           venueAmenities: selectedVenue.amenities || [],
-          noOfStalls: selectedVenue.noOfStalls || 0
+          noOfStalls: selectedVenue.noOfStalls || 0,
         };
-
+        if (isSuperAdmin && selectedVenue.organizationId) {
+          updatedData.organizationId = selectedVenue.organizationId;
+        }
 
         setFormData(prev => ({
           ...prev,
-          ...updatedData
+          ...updatedData,
         }));
-
       }
     }
   };
@@ -614,7 +622,7 @@ export const CreateEvent: React.FC = () => {
         attendees: formData.attendees,
         total_revenue: formData.totalRevenue,
         created_by: user?.id || null,
-        organization_id: user?.organizationId ?? null,
+        organization_id: resolveOrganizationId(isSuperAdmin, formData.organizationId, user?.organizationId),
         vendor_ids: selectedVendors,
         exhibitor_ids: selectedExhibitors,
         // Image field - store as JSON array for multiple images
@@ -821,6 +829,7 @@ export const CreateEvent: React.FC = () => {
                     eventEndTime: '',
                     venueId: '',
                     venueName: '',
+                    organizationId: '',
                     city: '',
                     maxCapacity: 100,
                     planType: 'Plan A',
@@ -902,6 +911,14 @@ export const CreateEvent: React.FC = () => {
                 </h3>
               </CardHeader>
               <CardContent className="space-y-6">
+                {isSuperAdmin && (
+                  <OrganizationSelect
+                    value={formData.organizationId}
+                    onChange={(id) => handleInputChange('organizationId', id)}
+                    organizations={organizations}
+                    error={errors.organizationId}
+                  />
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Event Title *

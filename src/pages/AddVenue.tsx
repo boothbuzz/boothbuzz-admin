@@ -39,10 +39,13 @@ import { Badge } from '../components/UI/Badge';
 import { useAuth } from '../contexts/AuthContext';
 import { COUNTRIES } from '../data/locations';
 import statesData from '../data/states.json';
+import { useOrganizations } from '../hooks/useOrganizations';
+import { OrganizationSelect, resolveOrganizationId } from '../components/UI/OrganizationSelect';
 
 interface FormData {
   name: string;
   location: string;
+  organizationId: string;
   contactPerson: string;
   contactRole: string;
   email: string;
@@ -125,7 +128,8 @@ const defaultAmenities = [
 
 export const AddVenue: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
+  const { organizations } = useOrganizations();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [isMapUpdating, setIsMapUpdating] = useState(false);
@@ -135,6 +139,7 @@ export const AddVenue: React.FC = () => {
   const [formData, setFormData] = useState<FormData>({
     name: '',
     location: '',
+    organizationId: '',
     contactPerson: '',
     contactRole: '',
     email: '',
@@ -616,6 +621,10 @@ export const AddVenue: React.FC = () => {
       console.log('✅ Name validation passed');
     }
 
+    if (isSuperAdmin && !formData.organizationId) {
+      newErrors.organizationId = 'Organization is required';
+    }
+
     // Location validation
     // if (!formData.location.trim()) {
     //   newErrors.location = 'Location is required';
@@ -1005,7 +1014,7 @@ export const AddVenue: React.FC = () => {
       const insertData = {
         name: formData.name,
         location: formData.location,
-        organization_id: user?.organizationId ?? null,
+        organization_id: resolveOrganizationId(isSuperAdmin, formData.organizationId, user?.organizationId),
         contact_person: formData.contactPerson,
         // contact_role: formData.contactRole, // Commented out until column is added to database
         email: formData.email,
@@ -1147,6 +1156,7 @@ export const AddVenue: React.FC = () => {
                   setFormData({
                     name: '',
                     location: '',
+                    organizationId: '',
                     contactPerson: '',
                     contactRole: '',
                     email: '',
@@ -1231,6 +1241,14 @@ export const AddVenue: React.FC = () => {
                 </h3>
               </CardHeader>
               <CardContent className="space-y-6">
+                {isSuperAdmin && (
+                  <OrganizationSelect
+                    value={formData.organizationId}
+                    onChange={(id) => handleInputChange('organizationId', id)}
+                    organizations={organizations}
+                    error={errors.organizationId}
+                  />
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Venue Name *

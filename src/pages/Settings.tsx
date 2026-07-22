@@ -102,7 +102,7 @@ export const Settings: React.FC = () => {
 
   const [securitySettings, setSecuritySettings] = useState<SecuritySettings>({
     twoFactorAuth: false,
-    sessionTimeout: 30,
+    sessionTimeout: 1440, // 24 hours
     passwordPolicy: {
       minLength: 8,
       requireUppercase: true,

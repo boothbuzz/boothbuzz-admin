@@ -16,6 +16,8 @@ import {
 import { Card, CardHeader, CardContent } from '../components/UI/Card';
 import { Button } from '../components/UI/Button';
 import { useAuth } from '../contexts/AuthContext';
+import { useOrganizations } from '../hooks/useOrganizations';
+import { OrganizationSelect, resolveOrganizationId } from '../components/UI/OrganizationSelect';
 
 type SponsorshipType = 'event' | 'society' | 'platform';
 type SponsorshipLevel = 'platinum' | 'gold' | 'silver' | 'bronze';
@@ -26,6 +28,7 @@ interface FormData {
   contactPerson: string;
   email: string;
   phone: string;
+  organizationId: string;
   sponsorshipType: SponsorshipType;
   sponsorshipLevel: SponsorshipLevel;
   amount: number;
@@ -41,7 +44,8 @@ interface FormErrors {
 
 export const AddSponsor: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isSuperAdmin } = useAuth();
+  const { organizations } = useOrganizations();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [formData, setFormData] = useState<FormData>({
@@ -49,6 +53,7 @@ export const AddSponsor: React.FC = () => {
     contactPerson: '',
     email: '',
     phone: '',
+    organizationId: '',
     sponsorshipType: 'event',
     sponsorshipLevel: 'silver',
     amount: 0,
@@ -72,6 +77,9 @@ export const AddSponsor: React.FC = () => {
     if (formData.startDate && formData.endDate && formData.startDate > formData.endDate) {
       newErrors.endDate = 'End date must be after start date';
     }
+    if (isSuperAdmin && !formData.organizationId) {
+      newErrors.organizationId = 'Organization is required';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -94,7 +102,7 @@ export const AddSponsor: React.FC = () => {
         .filter(Boolean);
 
       const { error } = await apiClient.from('sponsors').insert({
-        organization_id: user?.organizationId ?? null,
+        organization_id: resolveOrganizationId(isSuperAdmin, formData.organizationId, user?.organizationId),
         company_name: formData.companyName.trim(),
         contact_person: formData.contactPerson.trim(),
         email: formData.email.trim(),
@@ -167,6 +175,14 @@ export const AddSponsor: React.FC = () => {
                 </h3>
               </CardHeader>
               <CardContent className="space-y-4">
+                {isSuperAdmin && (
+                  <OrganizationSelect
+                    value={formData.organizationId}
+                    onChange={(id) => handleInputChange('organizationId', id)}
+                    organizations={organizations}
+                    error={errors.organizationId}
+                  />
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
                   <input
