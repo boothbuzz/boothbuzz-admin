@@ -110,6 +110,8 @@ export interface Event {
   cateringAllowed?: boolean | null; // catering_allowed from DB
   alcoholAllowed?: boolean | null; // alcohol_allowed from DB
   smokingAllowed?: boolean | null; // smoking_allowed from DB
+  selectedFacilities?: string[];
+  selectedAmenities?: string[];
   // Stalls Configuration
   inSiteStalls?: StallConfig[] | null; // in_site_stalls from DB
   outSiteStalls?: StallConfig[] | null; // out_site_stalls from DB

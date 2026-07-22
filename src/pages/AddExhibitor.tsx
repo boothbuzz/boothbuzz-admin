@@ -738,6 +738,7 @@ export const AddExhibitor: React.FC = () => {
         // Personal Information
         first_name: formData.firstName,
         last_name: formData.lastName,
+        contact_person: `${formData.firstName} ${formData.lastName}`.trim(),
         email: formData.email,
         phone: formData.phone,
         alternate_phone: formData.alternatePhone,
@@ -751,6 +752,7 @@ export const AddExhibitor: React.FC = () => {
         gst_number: formData.gstNumber,
         booth_size: formData.boothSize,
         business_description: formData.businessDescription,
+        company_description: formData.businessDescription,
         social_media_links: {
           facebook: formData.socialMediaLinks.facebook,
           linkedin: formData.socialMediaLinks.linkedin,

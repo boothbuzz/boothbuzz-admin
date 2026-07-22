@@ -90,6 +90,12 @@ interface FormData {
   bankHolderName: string;
   bankIfsc: string;
   bankMicr: string;
+  // Settings
+  availableHours: string;
+  parkingSpaces: number;
+  cateringAllowed: boolean;
+  alcoholAllowed: boolean;
+  smokingAllowed: boolean;
 }
 
 interface FormErrors {
@@ -177,7 +183,12 @@ export const AddVenue: React.FC = () => {
     bankAccountNumber: '',
     bankHolderName: '',
     bankIfsc: '',
-    bankMicr: ''
+    bankMicr: '',
+    availableHours: '',
+    parkingSpaces: 0,
+    cateringAllowed: false,
+    alcoholAllowed: false,
+    smokingAllowed: false,
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -1016,7 +1027,7 @@ export const AddVenue: React.FC = () => {
         location: formData.location,
         organization_id: resolveOrganizationId(isSuperAdmin, formData.organizationId, user?.organizationId),
         contact_person: formData.contactPerson,
-        // contact_role: formData.contactRole, // Commented out until column is added to database
+        contact_role: formData.contactRole || null,
         email: formData.email,
         phone: formData.phone,
         capacity: formData.memberCount,
@@ -1024,39 +1035,38 @@ export const AddVenue: React.FC = () => {
         amenities: formData.amenities,
         description: formData.description,
         status: formData.status,
-        // Extended Fields
         address_line1: formData.addressLine1,
-        // address_landmark: formData.addressLandmark,
-        // address_standard: formData.addressStandard,
-        // New Address Fields (enabled if columns exist)
+        address_landmark: formData.addressLandmark || null,
+        address_standard: formData.addressStandard || null,
         address_line2: formData.addressLine2 || null,
         city: formData.city || null,
         state: formData.state || null,
         pincode: formData.pincode || null,
         country: formData.country || 'India',
-        // area_sq_ft: formData.areaSqFt,
-        // kind_of_space: formData.kindOfSpace,
-        // is_covered: formData.isCovered,
-        // pricing_per_day: formData.pricingPerDay,
-        // facility_area_sq_ft: formData.facilityAreaSqFt,
-        // no_of_stalls: formData.noOfStalls,
-        // facility_covered: formData.facilityCovered,
-        // no_of_flats: formData.noOfFlats,
-        // Google Maps Fields - Commented out until columns are added to database
-        // latitude: formData.latitude,
-        // longitude: formData.longitude,
-        // formatted_address: formData.formattedAddress,
-        // Custom Contact Information - Commented out until column is added to database
-        // custom_contacts: formData.customContacts,
-        // Bank details (if columns exist)
+        area_sq_ft: formData.areaSqFt || null,
+        kind_of_space: formData.kindOfSpace || null,
+        is_covered: formData.isCovered,
+        pricing_per_day: formData.pricingPerDay || 0,
+        facility_area_sq_ft: formData.facilityAreaSqFt || null,
+        no_of_stalls: formData.noOfStalls || 0,
+        facility_covered: formData.facilityCovered,
+        no_of_flats: formData.noOfFlats || 0,
+        latitude: formData.latitude || null,
+        longitude: formData.longitude || null,
+        formatted_address: formData.formattedAddress || null,
+        custom_contacts: formData.customContacts || [],
         bank_name: formData.bankName || null,
         bank_account_number: formData.bankAccountNumber || null,
         bank_holder_name: formData.bankHolderName || null,
         bank_ifsc: formData.bankIfsc || null,
         bank_micr: formData.bankMicr || null,
-        // Files
         photos: uploadedPhotos,
-        documents: uploadedDocs
+        documents: uploadedDocs,
+        available_hours: formData.availableHours || null,
+        parking_spaces: formData.parkingSpaces || 0,
+        catering_allowed: formData.cateringAllowed,
+        alcohol_allowed: formData.alcoholAllowed,
+        smoking_allowed: formData.smokingAllowed,
       };
 
       console.log('📝 Insert data:', insertData);
@@ -1194,7 +1204,12 @@ export const AddVenue: React.FC = () => {
                     bankAccountNumber: '',
                     bankHolderName: '',
                     bankIfsc: '',
-                    bankMicr: ''
+                    bankMicr: '',
+                    availableHours: '',
+                    parkingSpaces: 0,
+                    cateringAllowed: false,
+                    alcoholAllowed: false,
+                    smokingAllowed: false,
                   });
                 }}
                 className="w-full"

@@ -636,6 +636,8 @@ export const CreateEvent: React.FC = () => {
         catering_allowed: formData.cateringAllowed,
         alcohol_allowed: formData.alcoholAllowed,
         smoking_allowed: formData.smokingAllowed,
+        selected_facilities: formData.selectedFacilities,
+        selected_amenities: formData.selectedAmenities,
         // Stalls Configuration
         no_of_stalls: formData.noOfStalls,
         in_site_stalls: formData.allStalls, // Store as JSONB array

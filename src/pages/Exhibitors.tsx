@@ -856,6 +856,7 @@ export const Exhibitors: React.FC = () => {
         // Personal Information (NEW - matching AddExhibitor Step 1)
         first_name: editFormData.firstName,
         last_name: editFormData.lastName,
+        contact_person: `${editFormData.firstName} ${editFormData.lastName}`.trim(),
         email: editFormData.email,
         phone: editFormData.phone,
         alternate_phone: editFormData.alternatePhone,
@@ -877,6 +878,7 @@ export const Exhibitors: React.FC = () => {
         gst_number: editFormData.gstNumber,
         booth_size: editFormData.boothSize,
         business_description: editFormData.businessDescription,
+        company_description: editFormData.businessDescription,
         social_media_links: {
           facebook: editFormData.socialMediaLinks.facebook,
           linkedin: editFormData.socialMediaLinks.linkedin,
@@ -895,27 +897,7 @@ export const Exhibitors: React.FC = () => {
         status: editFormData.status,
         payment_status: editFormData.paymentStatus,
         send_confirmation_email: editFormData.sendConfirmationEmail,
-        allow_marketing_emails: editFormData.allowMarketingEmails
-        
-        // ========== LEGACY FIELDS (COMMENTED OUT - NOT IN ADDEXHIBITOR) ==========
-        // company_description: editFormData.companyDescription,
-        // established_year: editFormData.establishedYear,
-        // company_size: editFormData.companySize,
-        // contact_person: editFormData.contactPerson,
-        // designation: editFormData.designation,
-        // alternate_email: editFormData.alternateEmail,
-        // business_type: editFormData.businessType,
-        // address: editFormData.address,
-        // booth_preference: editFormData.boothPreference,
-        // special_requirements: editFormData.specialRequirements,
-        // previous_exhibitions: editFormData.previousExhibitions,
-        // expected_visitors: editFormData.expectedVisitors,
-        // products: editFormData.products,
-        // services: editFormData.services,
-        // target_audience: editFormData.targetAudience,
-        // registration_fee: editFormData.registrationFee,
-        // payment_method: editFormData.paymentMethod,
-        // billing_address: editFormData.billingAddress,
+        allow_marketing_emails: editFormData.allowMarketingEmails,
       };
       
       console.log('Update data being sent:', updateData);

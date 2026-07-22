@@ -1060,12 +1060,18 @@ export const Events: React.FC = () => {
       // Layout Image Field
       layoutImage: null,
       layoutImageUrl: event.layoutImageUrl || '',
-      // Venue Facilities & Amenities
-      venueFacilities: [],
-      venueAmenities: [],
+      // Venue Facilities & Amenities (from linked venue so edit UI can show checkboxes)
+      venueFacilities: (() => {
+        const v = venues.find((venue) => venue.id === event.venueId);
+        return v?.facilities || [];
+      })(),
+      venueAmenities: (() => {
+        const v = venues.find((venue) => venue.id === event.venueId);
+        return v?.amenities || [];
+      })(),
       // Selected Facilities & Amenities for Event
-      selectedFacilities: [],
-      selectedAmenities: [],
+      selectedFacilities: event.selectedFacilities || [],
+      selectedAmenities: event.selectedAmenities || [],
       // Stalls Configuration
       noOfStalls: event.noOfStalls || 0,
       stallSize: '',
@@ -1130,17 +1136,9 @@ export const Events: React.FC = () => {
       errors.description = 'Description must be at least 10 characters';
     }
 
-    // Date validation
+    // Date validation — allow past dates on edit (event may already have started)
     if (!editFormData.eventDate) {
       errors.eventDate = 'Event start date is required';
-    } else {
-      const eventDate = new Date(editFormData.eventDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      if (eventDate < today) {
-        errors.eventDate = 'Event start date cannot be in the past';
-      }
     }
 
     // End date validation
@@ -1317,6 +1315,8 @@ export const Events: React.FC = () => {
         catering_allowed: editFormData.cateringAllowed,
         alcohol_allowed: editFormData.alcoholAllowed,
         smoking_allowed: editFormData.smokingAllowed,
+        selected_facilities: editFormData.selectedFacilities,
+        selected_amenities: editFormData.selectedAmenities,
         // Stalls Configuration
         no_of_stalls: editFormData.noOfStalls,
         in_site_stalls: editFormData.allStalls, // Store as JSONB array

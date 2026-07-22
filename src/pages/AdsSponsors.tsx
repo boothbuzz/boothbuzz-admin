@@ -186,18 +186,25 @@ export const AdsSponsors: React.FC = () => {
       return;
     }
 
+    const status = websiteAdForm.status || 'draft';
+    const mediaUrl = websiteAdForm.imageUrl?.trim() || '';
+    if (!mediaUrl) {
+      alert('Image URL is required for website ads.');
+      return;
+    }
+
     const payload = {
       title: websiteAdForm.title.trim(),
       advertiser: websiteAdForm.advertiser?.trim() || 'Website',
-      ad_section: websiteAdForm.adSection.trim(),
-      ad_type: websiteAdForm.adType || 'banner',
-      image_url: websiteAdForm.imageUrl?.trim() || null,
-      redirect_url: websiteAdForm.redirectUrl?.trim() || null,
+      section_key: websiteAdForm.adSection.trim(),
+      media_type: websiteAdForm.adType || 'image',
+      media_url: mediaUrl,
+      cta_url: websiteAdForm.redirectUrl?.trim() || null,
       start_date: websiteAdForm.startDate || null,
       end_date: websiteAdForm.endDate || null,
-      status: websiteAdForm.status || 'draft',
-      priority: Number(websiteAdForm.priority || 0),
-      updated_at: new Date().toISOString(),
+      status,
+      sort_order: Number(websiteAdForm.priority || 0),
+      is_active: status === 'active' || status === 'published',
     };
 
     if (isEditingWebsiteAd && websiteAdForm.id) {

@@ -4,6 +4,23 @@ import { useAuth } from '../contexts/AuthContext';
 import { User, Event, Venue, Vendor, Exhibitor } from '../types';
 import { parseExhibitorImageUrls } from '../utils/exhibitorPortfolio';
 
+/** Normalize API date values to YYYY-MM-DD for <input type="date">. */
+function toDateInputValue(value: unknown): string {
+  if (value == null || value === '') return '';
+  const s = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
+function splitContactName(contactPerson?: string | null): { firstName: string; lastName: string } {
+  const parts = (contactPerson || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: '', lastName: '' };
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+}
+
 export type UseSupabaseDataOptions = {
   limit?: number;
   order?: { column: string; ascending?: boolean };
@@ -151,8 +168,8 @@ export const useEvents = () => {
       organizationId: event.organization_id ?? null,
       title: event.title,
       description: event.description,
-      date: event.event_date,
-      eventEndDate: event.event_end_date,
+      date: toDateInputValue(event.event_date),
+      eventEndDate: toDateInputValue(event.event_end_date),
       time: event.event_time,
       eventEndTime: event.event_end_time,
       venue: event.venue_name || event.venue?.name || '',
@@ -179,12 +196,14 @@ export const useEvents = () => {
       })(),
       layoutImageUrl: event.layout_image_url,
       // Pricing & Availability
-      pricePerHour: event.price_per_hour,
-      availableHours: event.available_hours,
-      parkingSpaces: event.parking_spaces,
-      cateringAllowed: event.catering_allowed,
-      alcoholAllowed: event.alcohol_allowed,
-      smokingAllowed: event.smoking_allowed,
+      pricePerHour: Number(event.price_per_hour) || 0,
+      availableHours: event.available_hours || '',
+      parkingSpaces: event.parking_spaces || 0,
+      cateringAllowed: Boolean(event.catering_allowed),
+      alcoholAllowed: Boolean(event.alcohol_allowed),
+      smokingAllowed: Boolean(event.smoking_allowed),
+      selectedFacilities: event.selected_facilities || [],
+      selectedAmenities: event.selected_amenities || [],
       // Stalls Configuration
       exhibitors: event.exhibitor_ids || [],
       noOfStalls: event.no_of_stalls,
@@ -320,47 +339,55 @@ export const useExhibitors = () => {
     { order: { column: 'created_at', ascending: false } });
   
   // Transform data to match our Exhibitor interface
-  const exhibitors: Exhibitor[] = data.map((exhibitor: any) => ({
+  const exhibitors: Exhibitor[] = data.map((exhibitor: any) => {
+    const contactPerson = exhibitor.contact_person || exhibitor.contactPerson || '';
+    const fromContact = splitContactName(contactPerson);
+    const firstName = exhibitor.first_name || exhibitor.firstName || fromContact.firstName || '';
+    const lastName = exhibitor.last_name || exhibitor.lastName || fromContact.lastName || '';
+    const companyDescription =
+      exhibitor.company_description || exhibitor.companyDescription || exhibitor.business_description || '';
+
+    return {
     id: exhibitor.id,
     // Personal Information (NEW - matching AddExhibitor Step 1)
-    firstName: exhibitor.first_name || '',
-    lastName: exhibitor.last_name || '',
+    firstName,
+    lastName,
     
     // Company Information
     companyName: exhibitor.company_name || exhibitor.companyName || '',
-    companyDescription: exhibitor.company_description,
+    companyDescription,
     establishedYear: exhibitor.established_year,
     companySize: exhibitor.company_size,
     website: exhibitor.website,
     
     // Contact Information
-    contactPerson: exhibitor.contact_person || exhibitor.contactPerson || '',
+    contactPerson: contactPerson || `${firstName} ${lastName}`.trim(),
     designation: exhibitor.designation,
     email: exhibitor.email,
     phone: exhibitor.phone,
-    alternatePhone: exhibitor.alternate_phone,
+    alternatePhone: exhibitor.alternate_phone || exhibitor.alternatePhone || '',
     alternateEmail: exhibitor.alternate_email,
     
     // Business Details
     category: exhibitor.category,
-    subCategory: exhibitor.sub_category,
+    subCategory: exhibitor.sub_category || exhibitor.subCategory,
     businessType: exhibitor.business_type,
-    gstNumber: exhibitor.gst_number,
-    panNumber: exhibitor.pan_number,
-    businessDescription: exhibitor.business_description || '',
+    gstNumber: exhibitor.gst_number || exhibitor.gstNumber || '',
+    panNumber: exhibitor.pan_number || exhibitor.panNumber || '',
+    businessDescription: companyDescription,
     
     // Location & Address (NEW - matching AddExhibitor Step 2)
     address: exhibitor.address,
     address1: exhibitor.address1 || exhibitor.address || '',
     address2: exhibitor.address2 || '',
     city: exhibitor.city,
-    state: exhibitor.state,
-    pincode: exhibitor.pincode,
-    country: exhibitor.country,
+    state: exhibitor.state || '',
+    pincode: exhibitor.pincode || '',
+    country: exhibitor.country || '',
     
     // Exhibition Details
     boothPreference: exhibitor.booth_preference,
-    boothSize: exhibitor.booth_size,
+    boothSize: exhibitor.booth_size || exhibitor.boothSize || '',
     specialRequirements: exhibitor.special_requirements,
     previousExhibitions: exhibitor.previous_exhibitions,
     expectedVisitors: exhibitor.expected_visitors,
@@ -376,7 +403,7 @@ export const useExhibitors = () => {
     billingAddress: exhibitor.billing_address,
     
     // Additional Information
-    socialMediaLinks: exhibitor.social_media_links || {
+    socialMediaLinks: exhibitor.social_media_links || exhibitor.socialMediaLinks || {
       linkedin: '',
       facebook: '',
       twitter: '',
@@ -384,7 +411,7 @@ export const useExhibitors = () => {
     },
     
     // Documents & Images (NEW - matching AddExhibitor Steps 4 & 5)
-    documentUrls: exhibitor.document_urls || {
+    documentUrls: exhibitor.document_urls || exhibitor.documentUrls || {
       panCard: null,
       aadharCard: null,
       licence: null
@@ -408,7 +435,8 @@ export const useExhibitors = () => {
     // Timestamps
     created_at: exhibitor.created_at,
     updated_at: exhibitor.updated_at
-  }));
+  };
+  });
 
   return { exhibitors, loading, error, refetch };
 };
@@ -588,14 +616,14 @@ export const useWebsiteAds = (opts?: { skipOrgFilter?: boolean }) => {
     id: row.id,
     title: row.title,
     advertiser: row.advertiser ?? 'Website',
-    adSection: row.ad_section ?? '',
-    adType: row.ad_type ?? 'banner',
-    imageUrl: row.image_url ?? '',
-    redirectUrl: row.redirect_url ?? '',
-    startDate: row.start_date ?? '',
-    endDate: row.end_date ?? '',
-    status: row.status ?? 'draft',
-    priority: Number(row.priority) || 0,
+    adSection: row.section_key ?? row.ad_section ?? '',
+    adType: row.media_type ?? row.ad_type ?? 'banner',
+    imageUrl: row.media_url ?? row.image_url ?? '',
+    redirectUrl: row.cta_url ?? row.redirect_url ?? '',
+    startDate: row.start_date ? String(row.start_date).slice(0, 10) : '',
+    endDate: row.end_date ? String(row.end_date).slice(0, 10) : '',
+    status: row.status ?? (row.is_active === false ? 'inactive' : 'active'),
+    priority: Number(row.sort_order ?? row.priority) || 0,
     impressions: Number(row.impressions) || 0,
     clicks: Number(row.clicks) || 0,
     created_at: row.created_at,
