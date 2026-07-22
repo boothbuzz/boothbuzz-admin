@@ -9,6 +9,7 @@ import { mockVendors } from '../data/mockData';
 import { Vendor } from '../types';
 import { apiClient } from '../lib/apiClient';
 import { useVendors } from '../hooks/useSupabaseData';
+import { sanitizePhoneInput } from '../utils/phone';
 
 export const Vendors: React.FC = () => {
   const { vendors, loading, error, refetch } = useVendors();
@@ -422,8 +423,16 @@ export const Vendors: React.FC = () => {
                   <input
                     type="tel"
                     value={editFormData.phone || ''}
-                    onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
+                    onChange={(e) =>
+                      setEditFormData({
+                        ...editFormData,
+                        phone: sanitizePhoneInput(e.target.value),
+                      })
+                    }
+                    maxLength={10}
+                    inputMode="numeric"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="9876543210"
                   />
                 </div>
 

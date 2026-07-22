@@ -35,6 +35,7 @@ import { Card, CardContent, CardHeader } from '../components/UI/Card';
 import { Badge } from '../components/UI/Badge';
 import { Button } from '../components/UI/Button';
 import { PhoneInput } from '../components/UI/PhoneInput';
+import { isValidIndianMobile } from '../utils/phone';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/UI/Table';
 import { useExhibitors } from '../hooks/useSupabaseData';
 import { useAuth } from '../contexts/AuthContext';
@@ -1047,17 +1048,11 @@ export const Exhibitors: React.FC = () => {
       errors.email = 'Please enter a valid email address';
     }
     if (!editFormData.phone?.trim()) errors.phone = 'Phone number is required';
-    else {
-      const clean = String(editFormData.phone).replace(/[\s\-\(\)]/g, '');
-      if (clean.length !== 10 || !/^[0-9]{10}$/.test(clean)) {
-        errors.phone = 'Contact number must be exactly 10 digits';
-      }
+    else if (!isValidIndianMobile(editFormData.phone)) {
+      errors.phone = 'Contact number must be exactly 10 digits';
     }
-    if (editFormData.alternatePhone?.trim()) {
-      const alt = String(editFormData.alternatePhone).replace(/[\s\-\(\)]/g, '');
-      if (alt.length !== 10 || !/^[0-9]{10}$/.test(alt)) {
-        errors.alternatePhone = 'Alternate contact number must be exactly 10 digits';
-      }
+    if (editFormData.alternatePhone?.trim() && !isValidIndianMobile(editFormData.alternatePhone)) {
+      errors.alternatePhone = 'Alternate contact number must be exactly 10 digits';
     }
     if (!editFormData.companyName?.trim()) errors.companyName = 'Company name is required';
     if (!editFormData.category?.trim()) errors.category = 'Main category is required';
@@ -2339,16 +2334,16 @@ export const Exhibitors: React.FC = () => {
                           } ${!editFormData.category ? 'bg-gray-100' : 'bg-white'}`}
                         >
                           {!editFormData.category && (
-                            <p className="text-sm text-gray-500">
-                              Set main category on step 1 to enable sub-categories
+                            <p className="text-sm text-amber-700">
+                              Choose a <strong>Main Category</strong> first. Sub-categories stay optional after that.
                             </p>
                           )}
                           {editFormData.category && editSubCategories.length === 0 && (
-                            <p className="text-sm text-gray-500">No sub-categories available</p>
+                            <p className="text-sm text-gray-500">No sub-categories available for this category</p>
                           )}
                           {editFormData.category &&
                             editSubCategories.map((subCat) => (
-                              <label key={subCat} className="flex items-center gap-2 text-sm text-gray-700">
+                              <label key={subCat} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                                 <input
                                   type="checkbox"
                                   checked={selectedEditSubCategories.includes(subCat)}
@@ -2376,14 +2371,18 @@ export const Exhibitors: React.FC = () => {
                             type="text"
                             value={editFormData.panNumber || ''}
                             onChange={(e) => {
-                              setEditFormData({...editFormData, panNumber: e.target.value});
-                              validateField('panNumber', e.target.value);
+                              const pan = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+                              setEditFormData({ ...editFormData, panNumber: pan });
+                              validateField('panNumber', pan);
                             }}
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                            maxLength={10}
+                            autoCapitalize="characters"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase ${
                               editErrors.panNumber ? 'border-red-300' : 'border-gray-300'
                             }`}
                             placeholder="ABCDE1234F"
                           />
+                          <p className="mt-1 text-xs text-gray-500">10 characters · format ABCDE1234F · uppercase</p>
                           {editErrors.panNumber && (
                             <p className="mt-1 text-sm text-red-600 flex items-center">
                               <AlertCircle className="h-4 w-4 mr-1" />
@@ -2400,14 +2399,18 @@ export const Exhibitors: React.FC = () => {
                             type="text"
                             value={editFormData.gstNumber || ''}
                             onChange={(e) => {
-                              setEditFormData({...editFormData, gstNumber: e.target.value});
-                              validateField('gstNumber', e.target.value);
+                              const gst = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
+                              setEditFormData({ ...editFormData, gstNumber: gst });
+                              validateField('gstNumber', gst);
                             }}
-                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                            maxLength={15}
+                            autoCapitalize="characters"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase ${
                               editErrors.gstNumber ? 'border-red-300' : 'border-gray-300'
                             }`}
                             placeholder="22AAAAA0000A1Z5"
                           />
+                          <p className="mt-1 text-xs text-gray-500">Max 15 characters · uppercase</p>
                           {editErrors.gstNumber && (
                             <p className="mt-1 text-sm text-red-600 flex items-center">
                               <AlertTriangle className="h-4 w-4 mr-1" />

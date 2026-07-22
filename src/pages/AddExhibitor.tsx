@@ -32,6 +32,7 @@ import {
   Shield
 } from 'lucide-react';
 import { PhoneInput } from '../components/UI/PhoneInput';
+import { isValidIndianMobile } from '../utils/phone';
 import { Card, CardHeader, CardContent } from '../components/UI/Card';
 import { Button } from '../components/UI/Button';
 import { Badge } from '../components/UI/Badge';
@@ -276,8 +277,7 @@ export const AddExhibitor: React.FC = () => {
     if (!formData.email.trim()) newErrors.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = 'Invalid email format';
     if (!formData.phone.trim()) newErrors.phone = 'Contact number is required';
-    else if (formData.phone.length !== 10) newErrors.phone = 'Contact number must be exactly 10 digits';
-    else if (!/^[0-9]{10}$/.test(formData.phone)) newErrors.phone = 'Contact number must contain only digits';
+    else if (!isValidIndianMobile(formData.phone)) newErrors.phone = 'Contact number must be exactly 10 digits';
     if (formData.alternatePhone.trim()) {
       if (formData.alternatePhone.length !== 10) newErrors.alternatePhone = 'Alternate contact number must be exactly 10 digits';
       else if (!/^[0-9]{10}$/.test(formData.alternatePhone)) newErrors.alternatePhone = 'Alternate contact number must contain only digits';
@@ -1273,15 +1273,17 @@ export const AddExhibitor: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Sub Category <span className="text-gray-500 font-normal">(optional)</span>
                   </label>
-                  <div className={`max-h-40 overflow-y-auto border rounded-lg p-3 space-y-2 ${errors.subCategory ? 'border-red-300' : 'border-gray-300'} ${!formData.category ? 'bg-gray-100' : 'bg-white'}`}>
+                  <div className={`max-h-40 overflow-y-auto border rounded-lg p-3 space-y-2 ${errors.subCategory ? 'border-red-300' : 'border-gray-300'} ${!formData.category ? 'bg-gray-50' : 'bg-white'}`}>
                     {!formData.category && (
-                      <p className="text-sm text-gray-500">Select main category on Personal Information to enable sub-categories</p>
+                      <p className="text-sm text-amber-700">
+                        Choose a <strong>Main Category</strong> first (Personal Information step). Sub-categories stay optional after that.
+                      </p>
                     )}
                     {formData.category && selectedSubCategories.length === 0 && (
-                      <p className="text-sm text-gray-500">No sub-categories available</p>
+                      <p className="text-sm text-gray-500">No sub-categories available for this category</p>
                     )}
                     {formData.category && selectedSubCategories.map((subCat) => (
-                      <label key={subCat} className="flex items-center gap-2 text-sm text-gray-700">
+                      <label key={subCat} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={selectedSubCategoryValues.includes(subCat)}
@@ -1307,11 +1309,16 @@ export const AddExhibitor: React.FC = () => {
                     <input
                       type="text"
                       value={formData.panNumber}
-                      onChange={(e) => handleInputChange('panNumber', e.target.value)}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.panNumber ? 'border-red-300' : 'border-gray-300'
+                      onChange={(e) =>
+                        handleInputChange('panNumber', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))
+                      }
+                      maxLength={10}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase ${errors.panNumber ? 'border-red-300' : 'border-gray-300'
                         }`}
-                      placeholder="AAAAA0000A"
+                      placeholder="ABCDE1234F"
+                      autoCapitalize="characters"
                     />
+                    <p className="mt-1 text-xs text-gray-500">10 characters · format ABCDE1234F · uppercase</p>
                     {errors.panNumber && (
                       <p className="mt-1 text-sm text-red-600 flex items-center">
                         <AlertCircle className="h-4 w-4 mr-1" />
@@ -1327,10 +1334,13 @@ export const AddExhibitor: React.FC = () => {
                     <input
                       type="text"
                       value={formData.gstNumber}
-                      onChange={(e) => handleInputChange('gstNumber', e.target.value)}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.gstNumber ? 'border-red-300' : 'border-gray-300'}`}
+                      onChange={(e) => handleInputChange('gstNumber', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15))}
+                      maxLength={15}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase ${errors.gstNumber ? 'border-red-300' : 'border-gray-300'}`}
                       placeholder="27AAAAA0000A1Z5"
+                      autoCapitalize="characters"
                     />
+                    <p className="mt-1 text-xs text-gray-500">Max 15 characters · uppercase</p>
                     {errors.gstNumber && (
                       <p className="mt-1 text-sm text-red-600">
                         {errors.gstNumber}

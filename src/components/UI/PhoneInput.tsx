@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phone } from 'lucide-react';
+import { sanitizePhoneInput, PHONE_PLACEHOLDER, PHONE_HINT } from '../../utils/phone';
 
 interface PhoneInputProps {
   value: string;
@@ -16,68 +16,56 @@ interface PhoneInputProps {
 export const PhoneInput: React.FC<PhoneInputProps> = ({
   value,
   onChange,
-  placeholder = "9876543210",
+  placeholder = PHONE_PLACEHOLDER,
   required = false,
   error,
-  className = "",
+  className = '',
   label,
   name,
-  disabled = false
+  disabled = false,
 }) => {
   const [inputValue, setInputValue] = useState(value);
 
-  // Sync with prop value
   useEffect(() => {
     setInputValue(value);
   }, [value]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    
-    // Remove all non-digits
-    const digits = newValue.replace(/\D/g, '');
-    
-    // Limit to 10 digits
-    const limitedDigits = digits.substring(0, 10);
-    
-    // Update display
+  const applyValue = (raw: string) => {
+    const limitedDigits = sanitizePhoneInput(raw);
     setInputValue(limitedDigits);
-    
-    // Send to parent
     onChange(limitedDigits);
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    applyValue(e.target.value);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // Allow navigation and control keys
-    const allowedKeys = ['Backspace', 'Delete', 'Tab', 'Escape', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
-    
-    if (allowedKeys.includes(e.key)) {
-      return;
-    }
-    
-    // Only allow digits
+    const allowedKeys = [
+      'Backspace',
+      'Delete',
+      'Tab',
+      'Escape',
+      'Enter',
+      'ArrowLeft',
+      'ArrowRight',
+      'ArrowUp',
+      'ArrowDown',
+    ];
+
+    if (allowedKeys.includes(e.key)) return;
     if (!/^[0-9]$/.test(e.key)) {
       e.preventDefault();
       return;
     }
-    
-    // Check if we already have 10 digits
     if (inputValue.length >= 10) {
       e.preventDefault();
-      return;
     }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
-    
-    const pastedText = e.clipboardData.getData('text');
-    const digits = pastedText.replace(/\D/g, '').substring(0, 10);
-    
-    if (digits) {
-      setInputValue(digits);
-      onChange(digits);
-    }
+    applyValue(e.clipboardData.getData('text'));
   };
 
   return (
@@ -88,7 +76,6 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
         </label>
       )}
       <div className="relative">
-        {/* <Phone className="absolute left-1 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" /> */}
         <span className="absolute left-1 top-1/3 h-3 w-3 -translate-y-1/2 text-gray-400">+91-&nbsp;</span>
         <input
           type="tel"
@@ -103,24 +90,20 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
           } ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''} ${className}`}
           placeholder={placeholder}
           maxLength={10}
+          inputMode="numeric"
           autoComplete="tel"
         />
       </div>
-      {error && (
-        <p className="mt-1 text-sm text-red-600">
-          {error}
-        </p>
-      )}
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
       {!error && value.length > 0 && value.length < 10 && (
-        <p className="mt-1 text-sm text-amber-600">
-          Phone number must be exactly 10 digits
-        </p>
+        <p className="mt-1 text-sm text-amber-600">Phone number must be exactly 10 digits</p>
       )}
       {!error && value.length === 10 && (
-        <p className="mt-1 text-sm text-green-600">
-          ✓ Valid phone number
-        </p>
+        <p className="mt-1 text-sm text-green-600">✓ Valid phone number</p>
+      )}
+      {!error && value.length === 0 && (
+        <p className="mt-1 text-xs text-gray-500">{PHONE_HINT}</p>
       )}
     </div>
   );
-}; 
+};

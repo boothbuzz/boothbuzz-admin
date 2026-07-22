@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiClient } from '../lib/apiClient';
 import { validateEmail, validatePhone, validatePinCode, validateRequiredText, validateNumber } from '../utils/validation';
 import {
@@ -1198,10 +1198,14 @@ export const CreateEvent: React.FC = () => {
                     onChange={(e) => handleInputChange('venueId', e.target.value)}
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.venueId ? 'border-red-300' : 'border-gray-300'
                       }`}
-                    disabled={venuesLoading}
+                    disabled={venuesLoading || (!venuesLoading && activeVenues.length === 0)}
                   >
                     <option value="">
-                      {venuesLoading ? 'Loading venues...' : 'Select a venue'}
+                      {venuesLoading
+                        ? 'Loading venues...'
+                        : activeVenues.length === 0
+                          ? 'No venues available'
+                          : 'Select a venue'}
                     </option>
                     {activeVenues.map((venue) => (
                       <option key={venue.id} value={venue.id}>
@@ -1209,6 +1213,20 @@ export const CreateEvent: React.FC = () => {
                       </option>
                     ))}
                   </select>
+                  {!venuesLoading && activeVenues.length === 0 && (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      <p className="font-medium">Create a venue first</p>
+                      <p className="mt-1 text-amber-800">
+                        Events need a venue. Recommended order: Venues → Vendors → Exhibitors → Events.
+                      </p>
+                      <Link
+                        to="/venues/add"
+                        className="mt-2 inline-flex text-sm font-medium text-blue-700 hover:text-blue-800 underline"
+                      >
+                        Add a venue
+                      </Link>
+                    </div>
+                  )}
                   {errors.venueId && (
                     <p className="mt-1 text-sm text-red-600 flex items-center">
                       <AlertCircle className="h-4 w-4 mr-1" />

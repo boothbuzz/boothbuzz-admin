@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../lib/apiClient';
+import { sanitizePhoneInput, isValidIndianMobile } from '../utils/phone';
 import { 
   Save, 
   ArrowLeft, 
@@ -97,12 +98,11 @@ export const AddVendor: React.FC = () => {
       newErrors.email = 'Please enter a valid email address';
     }
 
-    // Phone validation
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    // Phone validation — India 10-digit mobile
     if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required';
-    } else if (!phoneRegex.test(formData.phone.replace(/[\s\-\(\)]/g, ''))) {
-      newErrors.phone = 'Please enter a valid phone number';
+    } else if (!isValidIndianMobile(formData.phone)) {
+      newErrors.phone = 'Phone number must be exactly 10 digits';
     }
 
     // Rating validation
@@ -400,11 +400,15 @@ export const AddVendor: React.FC = () => {
                       <input
                         type="tel"
                         value={formData.phone}
-                        onChange={(e) => handleInputChange('phone', e.target.value)}
+                        onChange={(e) =>
+                          handleInputChange('phone', sanitizePhoneInput(e.target.value))
+                        }
+                        maxLength={10}
+                        inputMode="numeric"
                         className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                           errors.phone ? 'border-red-300' : 'border-gray-300'
                         }`}
-                        placeholder="+91-9876543210"
+                        placeholder="9876543210"
                       />
                     </div>
                     {errors.phone && (

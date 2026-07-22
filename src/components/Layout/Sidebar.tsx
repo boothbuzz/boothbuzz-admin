@@ -38,10 +38,11 @@ const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ALL_ROLES },
   { name: 'Organizations', href: '/organizations', icon: Building, roles: ['super_admin'] },
   { name: 'Users', href: '/users', icon: Users, roles: ['super_admin', 'admin'] },
-  { name: 'Events', href: '/events', icon: Calendar, roles: ALL_ROLES },
+  // Master data before Events (Venue → Vendor → Exhibitor → Event)
   { name: 'Venues', href: '/venues', icon: Building2, roles: ALL_ROLES },
   { name: 'Vendors', href: '/vendors', icon: Truck, roles: ALL_ROLES },
   { name: 'Exhibitors', href: '/exhibitors', icon: UserCheck, roles: ALL_ROLES },
+  { name: 'Events', href: '/events', icon: Calendar, roles: ALL_ROLES },
   { name: 'Calendar', href: '/calendar', icon: Calendar, roles: ALL_ROLES },
   { name: 'Plans & Billing', href: '/billing', icon: CreditCard, roles: ['super_admin'] },
   { name: 'Ads & Sponsors', href: '/ads-sponsors', icon: Megaphone, roles: ALL_ROLES },

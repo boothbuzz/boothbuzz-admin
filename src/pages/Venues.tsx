@@ -8,6 +8,7 @@ import { Button } from '../components/UI/Button';
 import { Venue } from '../types';
 import { apiClient } from '../lib/apiClient';
 import { useVenues } from '../hooks/useSupabaseData';
+import { sanitizePhoneInput, isValidIndianMobile } from '../utils/phone';
 import { COUNTRIES } from '../data/locations';
 import statesData from '../data/states.json';
 
@@ -477,6 +478,8 @@ export const Venues: React.FC = () => {
     }
     if (!editFormData.phone.trim()) {
       errors.phone = 'Phone number is required';
+    } else if (!isValidIndianMobile(editFormData.phone)) {
+      errors.phone = 'Phone number must be exactly 10 digits';
     }
     // if ((editFormData.memberCount || 0) <= 0) {
     //   errors.memberCount = 'Capacity must be greater than 0';
@@ -1689,7 +1692,14 @@ export const Venues: React.FC = () => {
                               <input
                                 type="tel"
                                 value={editFormData.phone}
-                                onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                                onChange={(e) =>
+                                  setEditFormData({
+                                    ...editFormData,
+                                    phone: sanitizePhoneInput(e.target.value),
+                                  })
+                                }
+                                maxLength={10}
+                                inputMode="numeric"
                                 className={`w-full pl-14 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${editErrors.phone ? 'border-red-300' : 'border-gray-300'}`}
                                 placeholder="9876543210"
                               />

@@ -1,5 +1,7 @@
 // Validation utility functions for real-time form validation
 
+import { normalizeIndianMobile } from './phone';
+
 export interface ValidationResult {
   isValid: boolean;
   message: string;
@@ -23,27 +25,22 @@ export const validateEmail = (email: string): ValidationResult => {
   return { isValid: true, message: '' };
 };
 
-// Phone validation
+// Phone validation — India 10-digit mobile (aligned with API normalizePhone)
 export const validatePhone = (phone: string): ValidationResult => {
   if (!phone.trim()) {
     return { isValid: false, message: 'Phone number is required' };
   }
-  
-  // Remove all non-digit characters for validation
-  const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-  
-  if (cleanPhone.length < 10) {
-    return { isValid: false, message: 'Phone number must be at least 10 digits' };
+
+  const cleanPhone = normalizeIndianMobile(phone);
+
+  if (cleanPhone.length !== 10) {
+    return { isValid: false, message: 'Phone number must be exactly 10 digits' };
   }
-  
-  if (cleanPhone.length > 15) {
-    return { isValid: false, message: 'Phone number must be less than 15 digits' };
+
+  if (!/^\d{10}$/.test(cleanPhone)) {
+    return { isValid: false, message: 'Please enter a valid 10-digit phone number' };
   }
-  
-  if (!/^[\+]?[1-9][\d]{0,15}$/.test(cleanPhone)) {
-    return { isValid: false, message: 'Please enter a valid phone number' };
-  }
-  
+
   return { isValid: true, message: '' };
 };
 
