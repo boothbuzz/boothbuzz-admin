@@ -87,17 +87,12 @@ export const Organizations: React.FC = () => {
       setError('Organization name, admin email, and admin name are required.');
       return;
     }
-    if (!form.sendInvite && (!form.password || form.password.length < 6)) {
-      setError('Password is required (min 6 characters) when not sending invite.');
+    if (!form.password || form.password.length < 6) {
+      setError('Password is required (min 6 characters).');
       return;
     }
     setSubmitting(true);
     try {
-      if (form.sendInvite) {
-        setError('Email invites are not available in POC — set a password instead.');
-        setSubmitting(false);
-        return;
-      }
       const { data, error: apiErr } = await apiFetch('/admin/organizations', {
         method: 'POST',
         body: JSON.stringify({
@@ -113,7 +108,7 @@ export const Organizations: React.FC = () => {
         return;
       }
       void data;
-      setSuccess('Organization and admin user created successfully.');
+      setSuccess('Organization and admin user created. An invite email will be sent when Resend is configured.');
       setForm({ organizationName: '', adminEmail: '', adminName: '', password: '', sendInvite: false });
       setCreateOpen(false);
       fetchOrganizations();
@@ -288,27 +283,20 @@ export const Organizations: React.FC = () => {
                   placeholder="Jane Doe"
                 />
               </div>
-              <label className="flex items-center gap-2">
+              <p className="text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                An invite email with login details will be sent to the admin email when Resend is configured on the API.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
                 <input
-                  type="checkbox"
-                  checked={form.sendInvite}
-                  onChange={(e) => setForm((f) => ({ ...f, sendInvite: e.target.checked }))}
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Min 6 characters"
+                  minLength={6}
                 />
-                <span className="text-sm text-gray-700">Send invite email (no password set)</span>
-              </label>
-              {!form.sendInvite && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
-                  <input
-                    type="password"
-                    value={form.password}
-                    onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Min 6 characters"
-                    minLength={6}
-                  />
-                </div>
-              )}
+              </div>
               <div className="flex gap-2 pt-4">
                 <Button type="submit" disabled={submitting}>
                   {submitting ? 'Creating…' : 'Create'}

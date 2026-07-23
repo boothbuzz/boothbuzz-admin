@@ -197,12 +197,10 @@ export const AddUser: React.FC = () => {
     }
 
     if (isOrgAdminFlow) {
-      if (!formData.sendInvite) {
-        if (!formData.password || formData.password.length < 6) {
-          newErrors.password = 'Password is required (min 6 characters) when not sending invite';
-        } else if (formData.password !== formData.confirmPassword) {
-          newErrors.confirmPassword = 'Passwords do not match';
-        }
+      if (!formData.password || formData.password.length < 6) {
+        newErrors.password = 'Password is required (min 6 characters)';
+      } else if (formData.password !== formData.confirmPassword) {
+        newErrors.confirmPassword = 'Passwords do not match';
       }
     } else {
       if (!formData.password) {
@@ -240,7 +238,6 @@ export const AddUser: React.FC = () => {
 
     try {
       if (isOrgAdminFlow) {
-        if (formData.sendInvite) throw new Error('Email invites are not available in POC — set a password.');
         const { error: apiErr } = await apiClient.from('users').insert({
           email: formData.email.trim(),
           name: formData.name.trim(),
@@ -572,18 +569,12 @@ export const AddUser: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-6">
                 {isOrgAdminFlow && (
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.sendInvite}
-                      onChange={(e) => handleInputChange('sendInvite', e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span className="text-sm text-gray-700">Send invite email (user sets password)</span>
-                  </label>
+                  <p className="text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                    An invite email with login details will be sent to this address when Resend is configured on the API.
+                    Set a temporary password below (the user may be asked to change it on first login).
+                  </p>
                 )}
-                {(!isOrgAdminFlow || !formData.sendInvite) && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Password {isOrgAdminFlow ? '(min 6)' : '*'}
@@ -648,7 +639,6 @@ export const AddUser: React.FC = () => {
                       )}
                     </div>
                   </div>
-                )}
                 {!isOrgAdminFlow && (
                   <div className="flex items-center">
                     <input
