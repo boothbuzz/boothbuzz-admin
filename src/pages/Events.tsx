@@ -246,7 +246,7 @@ export const Events: React.FC = () => {
   };
 
   // Normalize image field regardless of DB shape:
-  // plain URL string, JSON stringified array, actual array, quoted/escaped JSON strings.
+  // plain URL string, JSON stringified array, actual array, host-free /api/v1/files paths.
   const parseEventImages = (eventImageUrl: unknown): string[] => {
     if (eventImageUrl == null) return [];
 
@@ -285,12 +285,17 @@ export const Events: React.FC = () => {
       return extracted;
     }
 
+    const filesMatch = normalized.match(/\/api\/v1\/files\/[^\s"'\\]+/gi);
+    if (filesMatch?.length) {
+      return filesMatch.map((u) => u.replace(/["\]]+$/g, ''));
+    }
+
     return [normalized];
   };
 
   const getPrimaryEventImage = (eventImageUrl: unknown): string => {
     const images = parseEventImages(eventImageUrl);
-    return images[0] || '';
+    return resolveMediaUrl(images[0] || '');
   };
 
   const getTotalStalls = (event: Event): number => {
@@ -1239,13 +1244,16 @@ export const Events: React.FC = () => {
       const uploadFlyerFile = async (file: File): Promise<string | null> => {
         const fileExt = file.name.split('.').pop() || 'jpg';
         const fileName = `flyer_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${fileExt}`;
-        const filePath = `event-images/${fileName}`;
-        const { error: uploadError } = await apiClient.storage.from('event-images').upload(filePath, file);
+        // Subfolder only — do not prefix with bucket name (avoids event-images/event-images/...)
+        const filePath = `flyers/${fileName}`;
+        const { data, error: uploadError } = await apiClient.storage.from('event-images').upload(filePath, file);
         if (uploadError) {
           console.error('❌ Flyer upload failed:', uploadError);
           showNotification('Flyer upload failed: ' + uploadError.message, 'error');
           return null;
         }
+        // Prefer host-free path from API for DB storage
+        if (data?.path) return data.path;
         const { data: urlData } = apiClient.storage.from('event-images').getPublicUrl(filePath);
         return urlData.publicUrl;
       };
@@ -1277,7 +1285,7 @@ export const Events: React.FC = () => {
           console.log('📤 Uploading new layout image...');
           const fileExt = editFormData.layoutImage.name.split('.').pop();
           const fileName = `layout_${Date.now()}.${fileExt}`;
-          const filePath = `event-images/${fileName}`;
+          const filePath = `layouts/${fileName}`;
 
           const { data: uploadData, error: uploadError } = await apiClient.storage
             .from('event-images')
@@ -1289,12 +1297,8 @@ export const Events: React.FC = () => {
             layoutImageUrl = editFormData.layoutImageUrl || '';
             console.log('⚠️ Continuing without new layout image upload');
           } else {
-            // Get public URL
-            const { data: urlData } = apiClient.storage
-              .from('event-images')
-              .getPublicUrl(filePath);
-
-            layoutImageUrl = urlData.publicUrl;
+            layoutImageUrl = uploadData?.path
+              ?? apiClient.storage.from('event-images').getPublicUrl(filePath).data.publicUrl;
             console.log('✅ Layout image uploaded successfully:', layoutImageUrl);
           }
         } catch (error) {
@@ -1900,7 +1904,7 @@ export const Events: React.FC = () => {
                            {images.slice(0, 4).map((imageUrl, index) => (
                              <img
                                key={index}
-                               src={imageUrl}
+                               src={resolveMediaUrl(imageUrl)}
                                alt={`${event.title} ${index + 1}`}
                                className="w-full h-16 object-cover rounded-lg border border-gray-200"
                              />
@@ -2217,7 +2221,7 @@ export const Events: React.FC = () => {
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Layout Image</label>
                         <img
-                          src={selectedEvent.layoutImageUrl}
+                          src={resolveMediaUrl(selectedEvent.layoutImageUrl)}
                           alt="Layout"
                           className="w-full h-48 object-cover rounded-lg border border-gray-200"
                         />
@@ -3212,7 +3216,7 @@ export const Events: React.FC = () => {
                           {editFormData.eventImageUrls.map((imageUrl, index) => (
                             <div key={index} className="relative group">
                               <img
-                                src={imageUrl}
+                                src={resolveMediaUrl(imageUrl)}
                                 alt={`Event flyer ${index + 1}`}
                                 className="w-full h-32 object-cover rounded-lg border border-gray-300"
                               />
@@ -3232,7 +3236,7 @@ export const Events: React.FC = () => {
                       {editFormData.eventImageUrl && editFormData.eventImageUrls.length === 0 && (
                         <div className="relative">
                           <img
-                            src={editFormData.eventImageUrl}
+                            src={resolveMediaUrl(editFormData.eventImageUrl)}
                             alt="Event preview"
                             className="w-full h-48 object-cover rounded-lg border border-gray-300"
                           />
@@ -3268,7 +3272,7 @@ export const Events: React.FC = () => {
                       {editFormData.layoutImageUrl ? (
                         <div className="relative">
                           <img
-                            src={editFormData.layoutImageUrl}
+                            src={resolveMediaUrl(editFormData.layoutImageUrl)}
                             alt="Layout preview"
                             className="w-full h-64 object-contain rounded-lg border border-gray-300 bg-gray-50"
                           />

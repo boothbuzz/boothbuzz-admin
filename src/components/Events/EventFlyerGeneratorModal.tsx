@@ -228,8 +228,8 @@ export const EventFlyerGeneratorModal: React.FC<Props> = ({ isOpen, event, onClo
       const extension =
         blob.type === 'image/jpeg' ? 'jpg' : blob.type === 'image/webp' ? 'webp' : 'png';
       const safeTitle = (event.title || 'event').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-      const filePath = `event-images/${event.id}/ai-flyer-${safeTitle}-${Date.now()}.${extension}`;
-      const { error: uploadError } = await apiClient.storage.from('event-images').upload(filePath, blob, {
+      const filePath = `flyers/${event.id}/ai-flyer-${safeTitle}-${Date.now()}.${extension}`;
+      const { data: uploadData, error: uploadError } = await apiClient.storage.from('event-images').upload(filePath, blob, {
         contentType: blob.type || 'image/png',
         upsert: false,
       });
@@ -238,8 +238,9 @@ export const EventFlyerGeneratorModal: React.FC<Props> = ({ isOpen, event, onClo
         throw new Error(uploadError.message || 'Failed to upload flyer image.');
       }
 
-      const { data: publicUrlData } = apiClient.storage.from('event-images').getPublicUrl(filePath);
-      const publicUrl = publicUrlData?.publicUrl;
+      const publicUrl =
+        uploadData?.path ??
+        apiClient.storage.from('event-images').getPublicUrl(filePath).data.publicUrl;
       if (!publicUrl) {
         throw new Error('Could not generate public URL for uploaded flyer.');
       }

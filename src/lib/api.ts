@@ -5,6 +5,11 @@ export function getApiUrl() {
   return API_URL.replace(/\/$/, '');
 }
 
+/** API origin without `/api/v1` — used to build absolute file URLs. */
+export function getApiOrigin() {
+  return getApiUrl().replace(/\/api\/v1$/i, '');
+}
+
 export function setAuthToken(token: string | null) {
   if (typeof window === 'undefined') return;
   if (token) {
@@ -76,26 +81,60 @@ export async function apiUpload(bucket: string, file: File | Blob, filePath?: st
   const form = new FormData();
   const name = file instanceof File ? file.name : 'upload.bin';
   form.append('file', file, name);
-  const q = filePath ? `?path=${encodeURIComponent(filePath.replace(/\/[^/]+$/, '') || '')}` : '';
+  // Only pass subdirectory (e.g. "flyers") — never re-include the bucket name
+  let sub = (filePath ?? '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  if (sub === bucket) sub = '';
+  if (sub.startsWith(`${bucket}/`)) sub = sub.slice(bucket.length + 1);
+  // If a full file path was passed, keep parent dir only (upload assigns the filename)
+  if (sub.includes('.')) {
+    sub = sub.replace(/\/[^/]+$/, '') || '';
+  }
+  const q = sub ? `?path=${encodeURIComponent(sub)}` : '';
   return apiFetch<{ url: string; path: string }>(`/files/${bucket}${q}`, {
     method: 'POST',
     body: form,
   });
 }
 
-export function publicFileUrl(bucket: string, objectPath: string) {
-  return `${getApiUrl()}/files/${bucket}/${objectPath.replace(/^\//, '')}`;
+/** Host-free path for DB: `/api/v1/files/{bucket}/...` */
+export function storedFilePath(bucket: string, objectPath: string) {
+  let rel = objectPath.replace(/\\/g, '/').replace(/^\/+/, '');
+  if (rel.startsWith('api/v1/files/')) return `/${rel}`;
+  if (rel.startsWith('/api/v1/files/')) return rel;
+  if (rel.startsWith(`${bucket}/`)) rel = rel.slice(bucket.length + 1);
+  return `/api/v1/files/${bucket}/${rel}`.replace(/([^:])\/{2,}/g, '$1/');
 }
 
-/** Turn relative storage paths into absolute URLs the browser can load. */
+export function publicFileUrl(bucket: string, objectPath: string) {
+  return `${getApiOrigin()}${storedFilePath(bucket, objectPath)}`;
+}
+
+/**
+ * Turn stored paths / legacy absolute URLs into a browser-loadable URL.
+ * Rewrites any host's `/api/v1/files/...` to the current VITE_API_URL origin.
+ */
 export function resolveMediaUrl(url: string | null | undefined): string {
   const raw = String(url ?? '').trim();
   if (!raw) return '';
-  if (/^(https?:|blob:|data:)/i.test(raw)) return raw;
-  if (raw.startsWith('/api/') || raw.startsWith('/files/')) {
-    const base = getApiUrl().replace(/\/api\/v1$/, '');
-    return `${base}${raw.startsWith('/') ? raw : `/${raw}`}`;
+  if (/^(blob:|data:)/i.test(raw)) return raw;
+
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const u = new URL(raw);
+      if (u.pathname.includes('/api/v1/files/')) {
+        const p = u.pathname.slice(u.pathname.indexOf('/api/v1/files/'));
+        return `${getApiOrigin()}${p}${u.search}`;
+      }
+      return raw;
+    } catch {
+      return raw;
+    }
   }
+
+  if (raw.startsWith('/api/') || raw.startsWith('/files/')) {
+    return `${getApiOrigin()}${raw.startsWith('/') ? raw : `/${raw}`}`;
+  }
+
   // Common storage path shapes: "event-images/..." or "bucket/path"
   const parts = raw.replace(/^\//, '').split('/');
   if (parts.length >= 2) {

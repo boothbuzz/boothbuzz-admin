@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '../../lib/apiClient';
+import { resolveMediaUrl } from '../../lib/api';
 
 type Props = Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
   src: string;
@@ -23,11 +24,11 @@ function parseStoragePublicUrl(url: string): { bucket: string; path: string } | 
  * Renders an exhibitor/event image; if the public URL fails (private bucket), requests a short-lived signed URL.
  */
 export const ExhibitorStorageImage: React.FC<Props> = ({ src, alt = '', onError, ...rest }) => {
-  const [resolved, setResolved] = useState(src);
+  const [resolved, setResolved] = useState(() => resolveMediaUrl(src) || src);
   const triedSign = useRef(false);
 
   useEffect(() => {
-    setResolved(src);
+    setResolved(resolveMediaUrl(src) || src);
     triedSign.current = false;
   }, [src]);
 

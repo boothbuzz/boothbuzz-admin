@@ -1,7 +1,7 @@
 /**
  * REST API data client for boothbuzz-api admin endpoints.
  */
-import { adminPathForTable, apiFetch, apiUpload, getApiUrl, publicFileUrl } from './api';
+import { adminPathForTable, apiFetch, apiUpload, getApiUrl, publicFileUrl, storedFilePath } from './api';
 
 type Row = Record<string, unknown>;
 
@@ -354,13 +354,22 @@ export const apiClient = {
     from(bucket: string) {
       return {
         async upload(filePath: string, file: File | Blob, _opts?: unknown) {
+          // filePath may be "flyers/name.jpg" or legacy "event-images/flyers/name.jpg"
           const dir = filePath.includes('/') ? filePath.replace(/\/[^/]+$/, '') : '';
-          const { data, error } = await apiUpload(bucket, file, dir ? `${dir}/` : undefined);
+          const { data, error } = await apiUpload(bucket, file, dir || undefined);
           if (error) return { data: null, error: { message: error.message } };
+          // data.path is host-free `/api/v1/files/...` — save this in DB
           return { data: { path: data!.path }, error: null };
         },
         getPublicUrl(objectPath: string) {
-          return { data: { publicUrl: publicFileUrl(bucket, objectPath) } };
+          // Return host-free path for DB; use resolveMediaUrl() for <img src>
+          const path =
+            objectPath.startsWith('/api/v1/files/') || objectPath.startsWith('api/v1/files/')
+              ? objectPath.startsWith('/')
+                ? objectPath
+                : `/${objectPath}`
+              : storedFilePath(bucket, objectPath);
+          return { data: { publicUrl: path } };
         },
         async list(_prefix: string) {
           return { data: [], error: null };

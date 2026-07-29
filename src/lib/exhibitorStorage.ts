@@ -3,7 +3,9 @@ import { apiClient } from './apiClient';
 export type ExhibitorUploadResult = { url: string | null; error: string | null };
 
 /**
- * Upload to exhibitor-images bucket and return a stable public URL (bucket must exist and allow authenticated insert; public read recommended).
+ * Upload to exhibitor-images bucket.
+ * Returns a host-free path (`/api/v1/files/...`) for DB storage.
+ * Use resolveMediaUrl() when displaying in <img>.
  */
 export async function uploadExhibitorPublicImage(
   file: File,
@@ -23,11 +25,13 @@ export async function uploadExhibitorPublicImage(
     console.error('Exhibitor image upload failed:', msg, error);
     return { url: null, error: msg };
   }
-  const path = data?.path ?? filePath;
-  const { data: pub } = apiClient.storage.from('exhibitor-images').getPublicUrl(path);
-  const publicUrl = pub?.publicUrl ?? null;
-  if (!publicUrl) {
-    return { url: null, error: 'Could not build public URL for uploaded file' };
+  // Prefer API host-free path; fall back to getPublicUrl (also host-free now)
+  const stored =
+    data?.path ??
+    apiClient.storage.from('exhibitor-images').getPublicUrl(filePath).data.publicUrl ??
+    null;
+  if (!stored) {
+    return { url: null, error: 'Could not build storage path for uploaded file' };
   }
-  return { url: publicUrl, error: null };
+  return { url: stored, error: null };
 }

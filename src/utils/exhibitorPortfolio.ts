@@ -3,10 +3,16 @@ import {
   normalizePersistableImageUrl,
 } from '../constants/exhibitorDefaultProfile';
 import { normalizeExhibitorImageUrlsForWrite } from '../lib/exhibitorImageDb';
+import { resolveMediaUrl } from '../lib/api';
 
 function isLikelyImageUrl(s: string): boolean {
   const t = s.trim();
-  return t.startsWith('http://') || t.startsWith('https://') || t.startsWith('/');
+  return (
+    t.startsWith('http://') ||
+    t.startsWith('https://') ||
+    t.startsWith('/') ||
+    t.includes('/api/v1/files/')
+  );
 }
 
 /**
@@ -51,9 +57,9 @@ export function exhibitorPortfolioDisplayUrl(input: {
   id?: string;
 }): string {
   const p = (input.portfolioImageUrl || '').trim();
-  if (p) return p;
+  if (p) return resolveMediaUrl(p) || p;
   const first = parseExhibitorImageUrls(input.imageUrls)[0];
-  if (first) return first;
+  if (first) return resolveMediaUrl(first) || first;
   return getDefaultExhibitorProfileUrl();
 }
 
