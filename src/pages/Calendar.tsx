@@ -23,6 +23,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSam
 import { apiClient } from '../lib/apiClient';
 import { useAuth } from '../contexts/AuthContext';
 import { csvFilename, downloadCsv } from '../lib/exportCsv';
+import { toDateInputValue } from '../hooks/useSupabaseData';
 
 interface CalendarEvent {
   id: string;
@@ -35,6 +36,76 @@ interface CalendarEvent {
   color: string;
   description?: string;
   event_type?: string;
+}
+
+const EMPTY_EVENT_FORM = {
+  title: '',
+  date: '',
+  time: '',
+  venue: '',
+  status: 'draft',
+  attendees: 0,
+  description: '',
+  event_type: 'exhibition',
+};
+
+/** Normalize API time values to HH:mm for <input type="time">. */
+function toTimeInputValue(value: unknown): string {
+  if (value == null || value === '') return '';
+  const s = String(value).trim();
+  const m24 = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (m24) {
+    return `${m24[1].padStart(2, '0')}:${m24[2]}`;
+  }
+  const m12 = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (m12) {
+    let h = parseInt(m12[1], 10);
+    const min = m12[2];
+    const ap = m12[3].toUpperCase();
+    if (ap === 'PM' && h < 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+    return `${String(h).padStart(2, '0')}:${min}`;
+  }
+  return '';
+}
+
+function normalizeCalendarStatus(status: unknown): string {
+  const s = String(status ?? '').trim().toLowerCase();
+  if (s === 'upcoming') return 'published';
+  const allowed = ['draft', 'published', 'ongoing', 'completed', 'cancelled'];
+  return allowed.includes(s) ? s : 'draft';
+}
+
+function mapDbRowToCalendarEvent(row: any, fallback?: Partial<CalendarEvent>): CalendarEvent {
+  const status = normalizeCalendarStatus(row?.status ?? fallback?.status);
+  return {
+    id: String(row?.id ?? fallback?.id ?? ''),
+    title: row?.title ?? fallback?.title ?? 'Untitled Event',
+    date: toDateInputValue(row?.event_date ?? row?.date ?? fallback?.date),
+    time: toTimeInputValue(row?.event_time ?? row?.time ?? fallback?.time),
+    venue: row?.venue_name ?? row?.venue ?? fallback?.venue ?? 'TBD',
+    status,
+    attendees: Number(row?.attendees ?? fallback?.attendees ?? 0) || 0,
+    color: getEventColorByStatus(status),
+    description: row?.description ?? fallback?.description ?? '',
+    event_type: fallback?.event_type || 'exhibition',
+  };
+}
+
+function getEventColorByStatus(status: string): string {
+  switch (status) {
+    case 'published':
+    case 'upcoming':
+      return 'bg-green-500';
+    case 'ongoing':
+      return 'bg-blue-500';
+    case 'completed':
+      return 'bg-gray-500';
+    case 'cancelled':
+      return 'bg-red-500';
+    default:
+      return 'bg-yellow-500';
+  }
 }
 
 // Add this new component for hover tooltip
@@ -78,7 +149,7 @@ const EventTooltip: React.FC<{
           )}
         </div>
         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          <Badge variant={event.status === 'upcoming' ? 'success' : 'info'} className="text-xs">
+          <Badge variant={event.status === 'published' || event.status === 'upcoming' ? 'success' : 'info'} className="text-xs">
             {event.status}
           </Badge>
           <span className="text-xs text-gray-500">{event.attendees} attendees</span>
@@ -96,18 +167,29 @@ const EventModal: React.FC<{
   onSave: (event: Omit<CalendarEvent, 'id' | 'color'>) => void;
   mode: 'create' | 'edit';
 }> = ({ isOpen, onClose, event, onSave, mode }) => {
-  const [formData, setFormData] = useState({
-    title: event?.title || '',
-    date: event?.date || '',
-    time: event?.time || '',
-    venue: event?.venue || '',
-    status: event?.status || 'draft',
-    attendees: event?.attendees || 0,
-    description: event?.description || '',
-    event_type: event?.event_type || 'exhibition'
-  });
-
+  const [formData, setFormData] = useState({ ...EMPTY_EVENT_FORM });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
+
+  // EventModal stays mounted; re-hydrate whenever it opens or the event changes.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (mode === 'edit' && event) {
+      setFormData({
+        title: event.title || '',
+        date: toDateInputValue(event.date),
+        time: toTimeInputValue(event.time),
+        venue: event.venue || '',
+        status: normalizeCalendarStatus(event.status),
+        attendees: event.attendees || 0,
+        description: event.description || '',
+        event_type: event.event_type || 'exhibition',
+      });
+    } else {
+      setFormData({ ...EMPTY_EVENT_FORM });
+    }
+    setErrors({});
+  }, [isOpen, mode, event]);
 
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {};
@@ -246,7 +328,7 @@ const EventModal: React.FC<{
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="draft">Draft</option>
-                <option value="upcoming">Upcoming</option>
+                <option value="published">Published</option>
                 <option value="ongoing">Ongoing</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
@@ -299,16 +381,6 @@ export const Calendar: React.FC = () => {
   const [hoveredEvent, setHoveredEvent] = useState<CalendarEvent | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
-  function getEventColor(status: string): string {
-    switch (status) {
-      case 'upcoming': return 'bg-green-500';
-      case 'ongoing': return 'bg-blue-500';
-      case 'completed': return 'bg-gray-500';
-      case 'cancelled': return 'bg-red-500';
-      default: return 'bg-yellow-500';
-    }
-  }
-
   // Enhanced fetchEvents function to better handle events data
   const fetchEvents = async () => {
     try {
@@ -348,46 +420,25 @@ export const Calendar: React.FC = () => {
 
       console.log('Raw events data:', data);
 
-      const calendarEvents: CalendarEvent[] = (data || []).map(event => {
-        // Use the correct date field name
-        let eventDate = event.event_date;
-        
-        // If date is still null/undefined, try created_at as fallback
-        if (!eventDate && event.created_at) {
-          eventDate = event.created_at;
+      const calendarEvents: CalendarEvent[] = (data || []).map((event) => {
+        const mapped = mapDbRowToCalendarEvent(event);
+        // If date is still empty, try created_at as fallback
+        if (!mapped.date && event.created_at) {
+          mapped.date = toDateInputValue(event.created_at);
         }
-        
-        // Ensure we have a valid date string
-        if (!eventDate) {
+        if (!mapped.date) {
           console.warn('No valid date found for event:', event);
-          eventDate = new Date().toISOString().split('T')[0]; // Use today as fallback
+          mapped.date = toDateInputValue(new Date().toISOString());
         }
-        
-        const eventTime = event.event_time;
-        const eventVenue = event.venue_name;
-        const eventStatus = event.status || 'draft';
-        const eventAttendees = event.attendees || 0;
-        const eventTitle = event.title || 'Untitled Event';
 
-        console.log('Processing event:', { 
-          originalEvent: event, 
-          eventDate, 
-          eventTitle,
-          parsedDate: new Date(eventDate)
+        console.log('Processing event:', {
+          originalEvent: event,
+          eventDate: mapped.date,
+          eventTitle: mapped.title,
+          parsedDate: new Date(mapped.date),
         });
 
-        return {
-          id: event.id,
-          title: eventTitle,
-          date: eventDate,
-          time: eventTime || '',
-          venue: eventVenue || 'TBD',
-          status: eventStatus,
-          attendees: eventAttendees,
-          color: getEventColor(eventStatus),
-          description: event.description || '',
-          event_type: 'exhibition' // Default since event_type doesn't exist in your table
-        };
+        return mapped;
       });
 
       console.log('Processed calendar events:', calendarEvents);
@@ -402,14 +453,22 @@ export const Calendar: React.FC = () => {
   // Create new event
   const handleCreateEvent = async (eventData: Omit<CalendarEvent, 'id' | 'color'>) => {
     try {
+      const payload = {
+        title: eventData.title,
+        event_date: eventData.date,
+        event_time: eventData.time || null,
+        venue_name: eventData.venue,
+        status: normalizeCalendarStatus(eventData.status),
+        attendees: eventData.attendees || 0,
+        description: eventData.description || '',
+        created_by: user?.id || '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
       const { data, error } = await apiClient
         .from('events')
-        .insert([{
-          ...eventData,
-          created_by: user?.id || '',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
+        .insert([payload])
         .select()
         .single();
 
@@ -419,10 +478,7 @@ export const Calendar: React.FC = () => {
       }
 
       // Add to local state
-      const newEvent: CalendarEvent = {
-        ...data,
-        color: getEventColor(data.status)
-      };
+      const newEvent = mapDbRowToCalendarEvent(data, eventData);
       setEvents(prev => [...prev, newEvent]);
       setEventModal({ isOpen: false, event: null, mode: 'create' });
     } catch (error) {
@@ -435,12 +491,20 @@ export const Calendar: React.FC = () => {
     if (!eventModal.event) return;
 
     try {
+      const payload = {
+        title: eventData.title,
+        event_date: eventData.date,
+        event_time: eventData.time || null,
+        venue_name: eventData.venue,
+        status: normalizeCalendarStatus(eventData.status),
+        attendees: eventData.attendees || 0,
+        description: eventData.description || '',
+        updated_at: new Date().toISOString(),
+      };
+
       const { data, error } = await apiClient
         .from('events')
-        .update({
-          ...eventData,
-          updated_at: new Date().toISOString()
-        })
+        .update(payload)
         .eq('id', eventModal.event.id)
         .select()
         .single();
@@ -451,11 +515,12 @@ export const Calendar: React.FC = () => {
       }
 
       // Update local state
-      const updatedEvent: CalendarEvent = {
-        ...data,
-        color: getEventColor(data.status)
-      };
+      const updatedEvent = mapDbRowToCalendarEvent(data, {
+        ...eventData,
+        id: eventModal.event.id,
+      });
       setEvents(prev => prev.map(event => event.id === updatedEvent.id ? updatedEvent : event));
+      setSelectedEvent(updatedEvent);
       setEventModal({ isOpen: false, event: null, mode: 'create' });
     } catch (error) {
       console.error('Error updating event:', error);
@@ -890,7 +955,7 @@ export const Calendar: React.FC = () => {
                 <div>
                   <label className="text-sm font-medium text-gray-700">Status</label>
                   <div className="mt-1">
-                    <Badge variant={selectedEvent.status === 'upcoming' ? 'success' : 'info'}>
+                    <Badge variant={selectedEvent.status === 'published' || selectedEvent.status === 'upcoming' ? 'success' : 'info'}>
                       {selectedEvent.status}
                     </Badge>
                   </div>
