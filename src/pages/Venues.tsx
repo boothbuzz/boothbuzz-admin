@@ -8,6 +8,7 @@ import { Button } from '../components/UI/Button';
 import { Venue } from '../types';
 import { apiClient } from '../lib/apiClient';
 import { resolveMediaUrl } from '../lib/api';
+import { parseVenueMediaEntries, toVenueMediaPayload } from '../lib/venueMedia';
 import { useVenues } from '../hooks/useSupabaseData';
 import { sanitizePhoneInput, isValidIndianMobile } from '../utils/phone';
 import { COUNTRIES } from '../data/locations';
@@ -123,49 +124,40 @@ export const Venues: React.FC = () => {
     }
   };
 
-  const mediaFromVenueRow = (
-    entries: unknown,
-  ): Array<{ name: string; url: string; type: string; size: number }> => {
-    if (!Array.isArray(entries)) return [];
-    return entries
-      .map((item: any) => {
-        if (!item) return null;
-        if (typeof item === 'string') {
-          const url = resolveMediaUrl(item);
-          return url ? { name: item.split('/').pop() || 'file', url, type: '', size: 0 } : null;
-        }
-        const url = resolveMediaUrl(item.url || item.path);
-        if (!url) return null;
-        return {
-          name: String(item.name || url.split('/').pop() || 'file'),
-          url,
-          type: String(item.type || ''),
-          size: Number(item.size) || 0,
-        };
-      })
-      .filter((x): x is { name: string; url: string; type: string; size: number } => !!x);
+  const loadVenueMedia = async (venue: Venue) => {
+    // Always refetch so photos/documents come from DB (not stale list / empty storage.list)
+    let row: any = venue;
+    try {
+      const { data, error } = await apiClient.from('venues').select('*').eq('id', venue.id).single();
+      if (!error && data) row = data;
+    } catch {
+      /* keep list row */
+    }
+
+    const photosRaw = row.photos ?? venue.photos;
+    const docsRaw = row.documents ?? venue.documents;
+    const photos = parseVenueMediaEntries(photosRaw);
+    const documents = parseVenueMediaEntries(docsRaw);
+
+    return {
+      row: { ...venue, ...row },
+      photos,
+      documents,
+    };
   };
 
   const handleView = async (venue: Venue) => {
-    // Prefer DB-persisted media metadata (files live under UPLOAD_DIR /files/...)
-    let photos = mediaFromVenueRow(venue.photos);
-    let documents = mediaFromVenueRow(venue.documents);
-
-    // Legacy fallback: list from storage only if row has no media metadata
-    if (!photos.length || !documents.length) {
-      const [bucketPhotos, bucketDocs] = await Promise.all([
-        photos.length ? Promise.resolve([]) : fetchPhotosFromBucket(venue.name),
-        documents.length ? Promise.resolve([]) : fetchDocumentsFromBucket(venue.name),
-      ]);
-      if (!photos.length) photos = bucketPhotos;
-      if (!documents.length) documents = bucketDocs;
-    }
-
-    setSelectedVenue({ ...venue, photos, documents });
+    const { row, photos, documents } = await loadVenueMedia(venue);
+    setSelectedVenue({
+      ...venue,
+      ...row,
+      photos: photos.map(({ name, url, type, size }) => ({ name, url, type, size })),
+      documents: documents.map(({ name, url, type, size }) => ({ name, url, type, size })),
+    } as Venue);
     setShowViewModal(true);
   };
 
-  // Helper function to fetch photos from venue-photos bucket
+  // Legacy helpers kept for rare rows with files on disk but no DB metadata
   const fetchPhotosFromBucket = async (venueName: string): Promise<Array<{ name: string; url: string; type: string; size: number }>> => {
     try {
       console.log('🔍 Fetching photos for venue:', venueName);
@@ -354,72 +346,76 @@ export const Venues: React.FC = () => {
   const handleEdit = async (venue: Venue) => {
     setSelectedVenue(venue);
 
-    let photos = mediaFromVenueRow(venue.photos);
-    let documents = mediaFromVenueRow(venue.documents);
-    if (!photos.length || !documents.length) {
-      const [bucketPhotos, bucketDocs] = await Promise.all([
-        photos.length ? Promise.resolve([]) : fetchPhotosFromBucket(venue.name),
-        documents.length ? Promise.resolve([]) : fetchDocumentsFromBucket(venue.name),
-      ]);
-      if (!photos.length) photos = bucketPhotos;
-      if (!documents.length) documents = bucketDocs;
-    }
+    const { row, photos, documents } = await loadVenueMedia(venue);
+    // Keep storedUrl for save; display url is absolute for <img>
+    const photoEntries = photos.map((p) => ({
+      name: p.name,
+      url: p.url,
+      type: p.type,
+      size: p.size,
+      storedUrl: p.storedUrl,
+    })) as any[];
+    const docEntries = documents.map((d) => ({
+      name: d.name,
+      url: d.url,
+      type: d.type,
+      size: d.size,
+      storedUrl: d.storedUrl,
+    })) as any[];
 
     // Map Venue to ExtendedVenueFormData with existing values
     const editData = {
       id: venue.id,
-      name: venue.name || '',
-      location: venue.location || '',
-      contactPerson: venue.contactPerson || '',
-      contactRole: (venue as any).contactRole || (venue as any).contact_role || '',
-      email: venue.email || '',
-      phone: venue.phone || '',
-      memberCount: venue.memberCount || 0,
-      facilities: venue.facilities || [],
-      amenities: venue.amenities || [],
-      description: venue.description || '',
-      status: venue.status || 'pending',
+      name: row.name || venue.name || '',
+      location: row.location || venue.location || '',
+      contactPerson: row.contact_person || row.contactPerson || venue.contactPerson || '',
+      contactRole: row.contact_role || row.contactRole || (venue as any).contactRole || '',
+      email: row.email || venue.email || '',
+      phone: row.phone || venue.phone || '',
+      memberCount: row.capacity || row.memberCount || venue.memberCount || 0,
+      facilities: row.facilities || venue.facilities || [],
+      amenities: row.amenities || venue.amenities || [],
+      description: row.description || venue.description || '',
+      status: row.status || venue.status || 'pending',
       // Extended Fields
-      addressLine1: venue.addressLine1 || '',
-      addressLine2: (venue as any).address_line2 || (venue as any).addressLine2 || '',
-      city: (venue as any).city || '',
-      state: (venue as any).state || '',
-      pincode: (venue as any).pincode || '',
-      country: (venue as any).country || 'India',
-      addressLandmark: venue.addressLandmark || '',
-      addressStandard: venue.addressStandard || '',
-      areaSqFt: venue.areaSqFt || 0,
-      kindOfSpace: venue.kindOfSpace || '',
-      isCovered: venue.isCovered || false,
-      pricingPerDay: venue.pricingPerDay || 0,
-      facilityAreaSqFt: venue.facilityAreaSqFt || 0,
-      noOfStalls: venue.noOfStalls || 0,
-      facilityCovered: venue.facilityCovered || false,
-      noOfFlats: venue.noOfFlats || 0,
+      addressLine1: row.address_line1 || row.addressLine1 || venue.addressLine1 || '',
+      addressLine2: row.address_line2 || row.addressLine2 || '',
+      city: row.city || '',
+      state: row.state || '',
+      pincode: row.pincode || '',
+      country: row.country || 'India',
+      addressLandmark: row.address_landmark || row.addressLandmark || venue.addressLandmark || '',
+      addressStandard: row.address_standard || row.addressStandard || venue.addressStandard || '',
+      areaSqFt: Number(row.area_sq_ft ?? row.areaSqFt ?? venue.areaSqFt ?? 0) || 0,
+      kindOfSpace: row.kind_of_space || row.kindOfSpace || venue.kindOfSpace || '',
+      isCovered: !!(row.is_covered ?? row.isCovered ?? venue.isCovered),
+      pricingPerDay: Number(row.pricing_per_day ?? row.pricingPerDay ?? venue.pricingPerDay ?? 0) || 0,
+      facilityAreaSqFt: Number(row.facility_area_sq_ft ?? row.facilityAreaSqFt ?? venue.facilityAreaSqFt ?? 0) || 0,
+      noOfStalls: Number(row.no_of_stalls ?? row.noOfStalls ?? venue.noOfStalls ?? 0) || 0,
+      facilityCovered: !!(row.facility_covered ?? row.facilityCovered ?? venue.facilityCovered),
+      noOfFlats: Number(row.no_of_flats ?? row.noOfFlats ?? venue.noOfFlats ?? 0) || 0,
       // Google Maps fields
-      latitude: venue.latitude || 0,
-      longitude: venue.longitude || 0,
-      formattedAddress: venue.formattedAddress || '',
-      // Files - fetched from storage buckets
-      photos: photos,
-      documents: documents,
+      latitude: Number(row.latitude ?? venue.latitude ?? 0) || 0,
+      longitude: Number(row.longitude ?? venue.longitude ?? 0) || 0,
+      formattedAddress: row.formatted_address || row.formattedAddress || venue.formattedAddress || '',
+      // Files from DB (resolved for preview)
+      photos: photoEntries,
+      documents: docEntries,
       // Custom Contact Information
-      customContacts: venue.customContacts || [],
+      customContacts: row.custom_contacts || row.customContacts || venue.customContacts || [],
       // Additional Settings (matching AddVenue)
-      availableHours: venue.availableHours || '',
-      parkingSpaces: venue.parkingSpaces || 0,
-      cateringAllowed: venue.cateringAllowed || false,
-      alcoholAllowed: venue.alcoholAllowed || false,
-      smokingAllowed: venue.smokingAllowed || false,
+      availableHours: row.available_hours || row.availableHours || venue.availableHours || '',
+      parkingSpaces: Number(row.parking_spaces ?? row.parkingSpaces ?? venue.parkingSpaces ?? 0) || 0,
+      cateringAllowed: !!(row.catering_allowed ?? row.cateringAllowed ?? venue.cateringAllowed),
+      alcoholAllowed: !!(row.alcohol_allowed ?? row.alcoholAllowed ?? venue.alcoholAllowed),
+      smokingAllowed: !!(row.smoking_allowed ?? row.smokingAllowed ?? venue.smokingAllowed),
       // Bank
-      bankName: (venue as any).bankName || (venue as any).bank_name || '',
-      bankAccountNumber: (venue as any).bankAccountNumber || (venue as any).bank_account_number || '',
-      bankHolderName: (venue as any).bankHolderName || (venue as any).bank_holder_name || '',
-      bankIfsc: (venue as any).bankIfsc || (venue as any).bank_ifsc || '',
-      bankMicr: (venue as any).bankMicr || (venue as any).bank_micr || ''
+      bankName: row.bank_name || row.bankName || '',
+      bankAccountNumber: row.bank_account_number || row.bankAccountNumber || '',
+      bankHolderName: row.bank_holder_name || row.bankHolderName || '',
+      bankIfsc: row.bank_ifsc || row.bankIfsc || '',
+      bankMicr: row.bank_micr || row.bankMicr || '',
     };
-
-
 
     setEditFormData(editData);
     setShowEditModal(true);
@@ -661,10 +657,10 @@ export const Venues: React.FC = () => {
               type: optimized.type || raw.type || 'image/jpeg',
               size: optimized.size || raw.size,
             });
-          } else if (p?.url) {
+          } else if (p?.storedUrl || p?.url) {
             finalPhotos.push({
               name: p.name || 'photo',
-              url: p.url,
+              url: p.storedUrl || p.url,
               type: p.type || 'image/jpeg',
               size: p.size || 0,
             });
@@ -688,10 +684,10 @@ export const Venues: React.FC = () => {
               type: toUpload.type || file.type || 'application/octet-stream',
               size: toUpload.size || file.size,
             });
-          } else if (d?.url) {
+          } else if (d?.storedUrl || d?.url) {
             finalDocs.push({
               name: d.name || 'document',
-              url: d.url,
+              url: d.storedUrl || d.url,
               type: d.type || 'application/octet-stream',
               size: d.size || 0,
             });
@@ -745,8 +741,8 @@ export const Venues: React.FC = () => {
         formatted_address: editFormData.formattedAddress,
 
         // Files: bytes on media store + metadata on venue row
-        photos: finalPhotos,
-        documents: finalDocs,
+        photos: toVenueMediaPayload(finalPhotos as any),
+        documents: toVenueMediaPayload(finalDocs as any),
 
         // Custom Contact Information
         custom_contacts: editFormData.customContacts,
@@ -1297,24 +1293,18 @@ export const Venues: React.FC = () => {
 
               {selectedVenue.photos && selectedVenue.photos.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {selectedVenue.photos.map((p: any, idx: number) => (
+                  {selectedVenue.photos.map((p: any, idx: number) => {
+                    const src = resolveMediaUrl(p.url || p.storedUrl || p.path);
+                    return (
                     <div key={idx} className="group relative bg-gray-50 rounded-lg overflow-hidden">
-                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="block">
+                      <a href={src} target="_blank" rel="noopener noreferrer" className="block">
                         <img
-                          src={p.url}
+                          src={src}
                           alt={p.name}
                           className="w-full h-40 object-cover hover:scale-105 transition-transform duration-200"
-                          onLoad={() => {
-                            console.log('✅ Image loaded successfully:', p.url);
-                          }}
                           onError={(e) => {
-                            console.log('❌ Image failed to load:', p.url);
-                            console.log('❌ Image error details:', e);
-                            console.log('❌ Photo object:', p);
-                            // Try alternative URL construction
-                            const altUrl = p.url.replace('/storage/v1/object/public/', '/storage/v1/object/sign/');
-                            console.log('🔄 Trying alternative URL:', altUrl);
-                            e.currentTarget.src = altUrl;
+                            console.log('❌ Image failed to load:', src, p);
+                            e.currentTarget.style.opacity = '0.3';
                           }}
                         />
                       </a>
@@ -1324,7 +1314,7 @@ export const Venues: React.FC = () => {
                         <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
                           <div className="font-medium text-sm truncate mb-1">{p.name}</div>
                           <div className="text-xs text-gray-200 flex items-center justify-between">
-                            <span>{p.type.split('/')[1]?.toUpperCase() || 'IMAGE'}</span>
+                            <span>{(p.type || '').split('/')[1]?.toUpperCase() || 'IMAGE'}</span>
                             <span>{p.size > 0 ? `${(p.size / 1024 / 1024).toFixed(2)} MB` : 'Size unknown'}</span>
                           </div>
                         </div>
@@ -1335,31 +1325,36 @@ export const Venues: React.FC = () => {
                         Click to view
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                   <ImageIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600 mb-2">No photos found</p>
                   <p className="text-sm text-gray-500">Images will appear here once uploaded to the venue-photos bucket</p>
-                  <p className="text-xs text-gray-400 mt-2">Check console for debugging info</p>
                 </div>
               )}
 
               {/* Documents List */}
-              {selectedVenue.documents && selectedVenue.documents.length > 0 && (
-                <div>
-                  <h4 className="font-medium text-gray-900 mb-3 flex items-center"><FileText className="h-4 w-4 mr-2" />Documents</h4>
+              <div>
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center"><FileText className="h-4 w-4 mr-2" />Documents ({selectedVenue.documents?.length || 0})</h4>
+                {selectedVenue.documents && selectedVenue.documents.length > 0 ? (
                   <div className="space-y-2">
-                    {selectedVenue.documents.map((d: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between text-sm">
-                        <span className="truncate">{d.name}</span>
-                        <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a>
-                      </div>
-                    ))}
+                    {selectedVenue.documents.map((d: any, idx: number) => {
+                      const href = resolveMediaUrl(d.url || d.storedUrl || d.path);
+                      return (
+                        <div key={idx} className="flex items-center justify-between text-sm">
+                          <span className="truncate">{d.name}</span>
+                          <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View</a>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-sm text-gray-500">No documents uploaded</p>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -2110,23 +2105,19 @@ export const Venues: React.FC = () => {
 
                           {editFormData.photos && editFormData.photos.length > 0 ? (
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
-                              {/* {console.log('🔍 Photos in editFormData:', editFormData.photos)} */}
-                              {editFormData.photos.map((p: any, idx: number) => (
+                              {editFormData.photos.map((p: any, idx: number) => {
+                                const src = p._file instanceof File
+                                  ? URL.createObjectURL(p._file)
+                                  : resolveMediaUrl(p.url || p.storedUrl || p.path);
+                                return (
                                 <div key={idx} className="relative group bg-gray-50 rounded-lg overflow-hidden">
                                   <img
-                                    src={p.url}
+                                    src={src}
                                     alt={p.name}
                                     className="w-full h-36 object-cover hover:scale-105 transition-transform duration-200"
-                                    onLoad={() => {
-                                      console.log('✅ Edit modal image loaded successfully:', p.url);
-                                    }}
                                     onError={(e) => {
-                                      console.log('❌ Edit modal image failed to load:', p.url);
-                                      console.log('❌ Photo object:', p);
-                                      // Try alternative URL construction
-                                      const altUrl = p.url.replace('/storage/v1/object/public/', '/storage/v1/object/sign/');
-                                      console.log('🔄 Trying alternative URL in edit modal:', altUrl);
-                                      e.currentTarget.src = altUrl;
+                                      console.log('❌ Edit modal image failed to load:', src, p);
+                                      e.currentTarget.style.opacity = '0.3';
                                     }}
                                   />
 
@@ -2155,12 +2146,13 @@ export const Venues: React.FC = () => {
                                     <div className="absolute bottom-0 left-0 right-0 p-2 text-white">
                                       <div className="text-xs font-medium truncate mb-1">{p.name}</div>
                                       <div className="text-xs text-gray-200">
-                                        {p.type.split('/')[1]?.toUpperCase() || 'IMAGE'} • {p.size > 0 ? `${(p.size / 1024 / 1024).toFixed(2)} MB` : 'Size unknown'}
+                                        {(p.type || '').split('/')[1]?.toUpperCase() || 'IMAGE'} • {p.size > 0 ? `${(p.size / 1024 / 1024).toFixed(2)} MB` : 'Size unknown'}
                                       </div>
                                     </div>
                                   </div>
                                 </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           ) : (
                             <div className="mt-3 p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
@@ -2218,7 +2210,18 @@ export const Venues: React.FC = () => {
                                       }}
                                     />
                                     <div className="flex items-center justify-between">
-                                      <span className="text-gray-600">{d.size ? `${(d.size / 1024 / 1024).toFixed(2)} MB` : 'No file selected'}</span>
+                                      {d.url && !d._file ? (
+                                        <a
+                                          href={resolveMediaUrl(d.storedUrl || d.url)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-blue-600 hover:underline truncate mr-2"
+                                        >
+                                          View current
+                                        </a>
+                                      ) : (
+                                        <span className="text-gray-600">{d.size ? `${(d.size / 1024 / 1024).toFixed(2)} MB` : 'No file selected'}</span>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={async () => {

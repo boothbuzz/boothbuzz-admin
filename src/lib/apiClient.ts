@@ -28,6 +28,10 @@ const LEAVE_NESTED_KEYS = new Set([
   'benefits',
   'facilities',
   'amenities',
+  'photos',
+  'documents',
+  'custom_contacts',
+  'customContacts',
 ]);
 
 export function toSnake<T>(value: T): T {

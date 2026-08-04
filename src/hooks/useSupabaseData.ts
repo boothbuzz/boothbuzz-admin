@@ -3,6 +3,7 @@ import { apiClient } from '../lib/apiClient';
 import { useAuth } from '../contexts/AuthContext';
 import { User, Event, Venue, Vendor, Exhibitor } from '../types';
 import { parseExhibitorImageUrls } from '../utils/exhibitorPortfolio';
+import { parseVenueMediaEntries } from '../lib/venueMedia';
 
 /** Normalize API date values to YYYY-MM-DD for <input type="date">. */
 export function toDateInputValue(value: unknown): string {
@@ -312,8 +313,8 @@ export const useVenues = () => {
       longitude: venue.longitude,
       formattedAddress: venue.formatted_address,
       description: venue.description,
-      photos: venue.photos || [],
-      documents: venue.documents || [],
+      photos: parseVenueMediaEntries(venue.photos).map(({ name, url, type, size }) => ({ name, url, type, size })),
+      documents: parseVenueMediaEntries(venue.documents).map(({ name, url, type, size }) => ({ name, url, type, size })),
       // Custom Contact Information
       customContacts: venue.custom_contacts || [],
       // Bank details
