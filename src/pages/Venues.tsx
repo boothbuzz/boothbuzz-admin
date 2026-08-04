@@ -7,6 +7,7 @@ import { Badge } from '../components/UI/Badge';
 import { Button } from '../components/UI/Button';
 import { Venue } from '../types';
 import { apiClient } from '../lib/apiClient';
+import { resolveMediaUrl } from '../lib/api';
 import { useVenues } from '../hooks/useSupabaseData';
 import { sanitizePhoneInput, isValidIndianMobile } from '../utils/phone';
 import { COUNTRIES } from '../data/locations';
@@ -122,23 +123,45 @@ export const Venues: React.FC = () => {
     }
   };
 
+  const mediaFromVenueRow = (
+    entries: unknown,
+  ): Array<{ name: string; url: string; type: string; size: number }> => {
+    if (!Array.isArray(entries)) return [];
+    return entries
+      .map((item: any) => {
+        if (!item) return null;
+        if (typeof item === 'string') {
+          const url = resolveMediaUrl(item);
+          return url ? { name: item.split('/').pop() || 'file', url, type: '', size: 0 } : null;
+        }
+        const url = resolveMediaUrl(item.url || item.path);
+        if (!url) return null;
+        return {
+          name: String(item.name || url.split('/').pop() || 'file'),
+          url,
+          type: String(item.type || ''),
+          size: Number(item.size) || 0,
+        };
+      })
+      .filter((x): x is { name: string; url: string; type: string; size: number } => !!x);
+  };
+
   const handleView = async (venue: Venue) => {
-    setSelectedVenue(venue);
+    // Prefer DB-persisted media metadata (files live under UPLOAD_DIR /files/...)
+    let photos = mediaFromVenueRow(venue.photos);
+    let documents = mediaFromVenueRow(venue.documents);
 
-    // Fetch photos and documents from storage buckets for view modal
-    const [photos, documents] = await Promise.all([
-      fetchPhotosFromBucket(venue.name),
-      fetchDocumentsFromBucket(venue.name)
-    ]);
+    // Legacy fallback: list from storage only if row has no media metadata
+    if (!photos.length || !documents.length) {
+      const [bucketPhotos, bucketDocs] = await Promise.all([
+        photos.length ? Promise.resolve([]) : fetchPhotosFromBucket(venue.name),
+        documents.length ? Promise.resolve([]) : fetchDocumentsFromBucket(venue.name),
+      ]);
+      if (!photos.length) photos = bucketPhotos;
+      if (!documents.length) documents = bucketDocs;
+    }
 
-    // Update the venue object with fetched photos and documents
-    const venueWithFiles = {
-      ...venue,
-      photos: photos,
-      documents: documents
-    };
-
-    setSelectedVenue(venueWithFiles);
+    setSelectedVenue({ ...venue, photos, documents });
     setShowViewModal(true);
   };
 
@@ -331,11 +354,16 @@ export const Venues: React.FC = () => {
   const handleEdit = async (venue: Venue) => {
     setSelectedVenue(venue);
 
-    // Fetch photos and documents from storage buckets
-    const [photos, documents] = await Promise.all([
-      fetchPhotosFromBucket(venue.name),
-      fetchDocumentsFromBucket(venue.name)
-    ]);
+    let photos = mediaFromVenueRow(venue.photos);
+    let documents = mediaFromVenueRow(venue.documents);
+    if (!photos.length || !documents.length) {
+      const [bucketPhotos, bucketDocs] = await Promise.all([
+        photos.length ? Promise.resolve([]) : fetchPhotosFromBucket(venue.name),
+        documents.length ? Promise.resolve([]) : fetchDocumentsFromBucket(venue.name),
+      ]);
+      if (!photos.length) photos = bucketPhotos;
+      if (!documents.length) documents = bucketDocs;
+    }
 
     // Map Venue to ExtendedVenueFormData with existing values
     const editData = {
@@ -612,30 +640,62 @@ export const Venues: React.FC = () => {
         return;
       }
 
-      // Upload new files to bucket, don't store URLs in venue table
+      // Upload new files to media store, keep existing URLs, then save both on the venue row
+      type VenueFileMeta = { name: string; url: string; type: string; size: number };
+      let finalPhotos: VenueFileMeta[] = [];
+      let finalDocs: VenueFileMeta[] = [];
       try {
         const slug = slugifyVenue(editFormData.name);
 
-        // Upload new photos to venue-photos bucket
-        const newPhotoFiles = (editFormData.photos as any[] || []).filter(p => p && p._file instanceof File).map(p => p._file as File);
-        for (const raw of newPhotoFiles) {
-          const optimized = await compressImage(raw, 1600, 0.85);
-          const safeName = raw.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
-          const path = `${slug}/${Date.now()}_${safeName}`;
-          await uploadToBucket('venue-photos', path, optimized);
+        finalPhotos = [];
+        for (const p of (editFormData.photos as any[]) || []) {
+          if (p && p._file instanceof File) {
+            const raw = p._file as File;
+            const optimized = await compressImage(raw, 1600, 0.85);
+            const safeName = raw.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+            const path = `${slug}/${Date.now()}_${safeName}`;
+            const { url } = await uploadToBucket('venue-photos', path, optimized);
+            finalPhotos.push({
+              name: p.name || `${editFormData.name} - ${raw.name}`,
+              url,
+              type: optimized.type || raw.type || 'image/jpeg',
+              size: optimized.size || raw.size,
+            });
+          } else if (p?.url) {
+            finalPhotos.push({
+              name: p.name || 'photo',
+              url: p.url,
+              type: p.type || 'image/jpeg',
+              size: p.size || 0,
+            });
+          }
         }
 
-        // Upload new documents to venue-documents bucket
-        const newDocEntries = (editFormData.documents as any[] || []).filter(d => d && d._file && typeof d._file !== 'string');
-        for (const d of newDocEntries) {
-          const file = d._file as File;
-          let toUpload = file;
-          if (/image\//i.test(file.type)) {
-            toUpload = await compressImage(file, 1600, 0.85);
+        finalDocs = [];
+        for (const d of (editFormData.documents as any[]) || []) {
+          if (d && d._file && typeof d._file !== 'string' && d._file instanceof File) {
+            const file = d._file as File;
+            let toUpload = file;
+            if (/image\//i.test(file.type)) {
+              toUpload = await compressImage(file, 1600, 0.85);
+            }
+            const safeName = toUpload.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+            const path = `${slug}/${Date.now()}_${safeName}`;
+            const { url } = await uploadToBucket('venue-documents', path, toUpload);
+            finalDocs.push({
+              name: d.name || `${editFormData.name} - ${file.name}`,
+              url,
+              type: toUpload.type || file.type || 'application/octet-stream',
+              size: toUpload.size || file.size,
+            });
+          } else if (d?.url) {
+            finalDocs.push({
+              name: d.name || 'document',
+              url: d.url,
+              type: d.type || 'application/octet-stream',
+              size: d.size || 0,
+            });
           }
-          const safeName = toUpload.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
-          const path = `${slug}/${Date.now()}_${safeName}`;
-          await uploadToBucket('venue-documents', path, toUpload);
         }
       } catch (uploadErr: any) {
         console.error('Upload error:', uploadErr);
@@ -684,9 +744,9 @@ export const Venues: React.FC = () => {
         longitude: editFormData.longitude,
         formatted_address: editFormData.formattedAddress,
 
-        // Files are stored in bucket, not in venue table
-        photos: [],
-        documents: [],
+        // Files: bytes on media store + metadata on venue row
+        photos: finalPhotos,
+        documents: finalDocs,
 
         // Custom Contact Information
         custom_contacts: editFormData.customContacts,

@@ -279,8 +279,17 @@ export const AddVenue: React.FC = () => {
         const path = `${slug}/${Date.now()}_${safeName}`;
         const { data: up, error: upErr } = await apiClient.storage.from('venue-photos').upload(path, f, { upsert: false });
         if (upErr) throw upErr;
-        const { data: pub } = apiClient.storage.from('venue-photos').getPublicUrl(up.path);
-        uploadedPhotos.push({ name: `${venueIdHint} - ${f.name}`, url: pub.publicUrl, type: f.type, size: f.size });
+        // Prefer host-free path from upload response (persisted under UPLOAD_DIR)
+        const storedPath =
+          up?.path ??
+          apiClient.storage.from('venue-photos').getPublicUrl(path).data.publicUrl;
+        if (!storedPath) throw new Error(`Photo upload did not return a storage path for ${f.name}`);
+        uploadedPhotos.push({
+          name: `${venueIdHint} - ${f.name}`,
+          url: storedPath,
+          type: f.type,
+          size: f.size,
+        });
       }
 
       const uploadedDocs: Array<{ name: string; url: string; type: string; size: number }> = [];
@@ -291,8 +300,16 @@ export const AddVenue: React.FC = () => {
         const path = `${slug}/${Date.now()}_${safeName}`;
         const { data: up, error: upErr } = await apiClient.storage.from('venue-documents').upload(path, f, { upsert: false });
         if (upErr) throw upErr;
-        const { data: pub } = apiClient.storage.from('venue-documents').getPublicUrl(up.path);
-        uploadedDocs.push({ name: d.name ? `${venueIdHint} - ${d.name}` : `${venueIdHint} - ${f.name}`, url: pub.publicUrl, type: f.type, size: f.size });
+        const storedPath =
+          up?.path ??
+          apiClient.storage.from('venue-documents').getPublicUrl(path).data.publicUrl;
+        if (!storedPath) throw new Error(`Document upload did not return a storage path for ${f.name}`);
+        uploadedDocs.push({
+          name: d.name ? `${venueIdHint} - ${d.name}` : `${venueIdHint} - ${f.name}`,
+          url: storedPath,
+          type: f.type,
+          size: f.size,
+        });
       }
 
       return { uploadedPhotos, uploadedDocs };
@@ -1019,8 +1036,23 @@ export const AddVenue: React.FC = () => {
         return;
       }
 
-      // Upload files first (optional; safe to proceed if none selected)
-      const { uploadedPhotos = [], uploadedDocs = [] } = await uploadVenueFiles(formData.name).catch(() => ({ uploadedPhotos: [], uploadedDocs: [] }));
+      // Upload files to media store first, then persist URLs on the venue row
+      let uploadedPhotos: Array<{ name: string; url: string; type: string; size: number }> = [];
+      let uploadedDocs: Array<{ name: string; url: string; type: string; size: number }> = [];
+      try {
+        const uploaded = await uploadVenueFiles(formData.name);
+        uploadedPhotos = uploaded.uploadedPhotos;
+        uploadedDocs = uploaded.uploadedDocs;
+      } catch (uploadErr: unknown) {
+        const msg =
+          uploadErr instanceof Error
+            ? uploadErr.message
+            : (uploadErr as { message?: string })?.message || 'Failed to upload venue files';
+        showNotification(msg, 'error');
+        setErrors({ submit: msg });
+        setIsSubmitting(false);
+        return;
+      }
 
       const insertData = {
         name: formData.name,
