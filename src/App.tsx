@@ -1,5 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+
+/** Vite `base` (e.g. `/admin/`) → React Router basename `/admin`; local `/` → no basename. */
+const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, '') || undefined;
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout/Layout';
 import { AutoLogoutWarning } from './components/AutoLogoutWarning';
@@ -204,7 +207,7 @@ function App() {
   const { isLoading } = useAuth();
 
   return (
-    <Router>
+    <Router basename={routerBasename}>
       <AutoLogoutWarning />
       {isLoading ? (
         <div className="min-h-screen flex items-center justify-center">
